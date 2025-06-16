@@ -12,7 +12,7 @@ global user minyangWin;
 
 /*minyangWin  */
 if strmatch("$user","minyangWin"){;
-global my_projdir "C:/Users/Min-Yang.Lee/Documents/new-project-templates";
+global my_projdir "C:/Users/Min-Yang.Lee/Documents/READ-SSB-Fishery-Value";
 };
 
 
