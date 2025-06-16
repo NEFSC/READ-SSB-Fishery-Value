@@ -2,7 +2,10 @@
 
 A repository for the Fishery Value Project. 
 
-# How to use
+# How to Contribute
+
+1. Please use base R and tidyverse as much as possible.
+2. Use snake_case (example: user_input). Please do not use camelCase.
 
 # Overview and Folder structure
 
