@@ -34,7 +34,13 @@ dbDisconnect(nova_conn)
 fmp_listing <-fmp_listing %>%
   mutate(COUNCIL = ifelse(COUNCIL == "NEFMC/MAFMC", "MAFMC/NEFMC", COUNCIL))
 fmp_listing <- fmp_listing %>%
-  rename_with(tolower)
+  rename_with(tolower)%>%
+  arrange(council, fmp, itis_tsn)
+
+
+write_rds(fmp_listing, file=here("data_folder","main",glue("fmp_listing_{vintage_string}.Rds")))
+write_csv(fmp_listing, file=here("data_folder","main",glue("fmp_listing_{vintage_string}.csv")))
+
 
 
 # rename to lower
