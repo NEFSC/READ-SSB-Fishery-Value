@@ -60,20 +60,20 @@ fmp_value<-species_value %>%
   group_by(year, fmp,council)%>%
   summarise(valueReal=sum(valueReal)) %>%
     ungroup() %>%
-  pivot_wider(names_from=year, values_from=valueReal, names_prefix="Value") %>%
+  pivot_wider(names_from=year, values_from=valueReal, names_prefix="ValueReal") %>%
   arrange(council, fmp )%>%
   relocate(council, fmp) %>%
-  mutate(across(starts_with("Value"), ~ replace_na(.x, 0)))
+  mutate(across(starts_with("ValueReal"), ~ replace_na(.x, 0)))
 
 #construct species values
 species_value<-species_value %>%
-  pivot_wider(names_from=year, values_from=valueReal, names_prefix="Value") %>%
+  pivot_wider(names_from=year, values_from=valueReal, names_prefix="ValueReal") %>%
   arrange(council, fmp, itis_tsn, itis_sci_name, itis_name)%>%
   relocate(council, fmp, itis_tsn, itis_sci_name,itis_name) %>%
-  mutate(across(starts_with("Value"), ~ replace_na(.x, 0))) %>%
-  mutate(across(starts_with("Value"), ~ round(.x, 0)))
+  mutate(across(starts_with("ValueReal"), ~ replace_na(.x, 0))) %>%
+  mutate(across(starts_with("ValueReal"), ~ round(.x, 0)))
 
 
-write_xlsx(species_value,here("data_folder","main",glue("species_value_{vintage_string}.xlsx")))
+write_xlsx(species_value,here("data_folder","main",glue("northeast_species_value_{vintage_string}.xlsx")))
 
-write_xlsx(fmp_value,here("data_folder","main",glue("fmp_value_{vintage_string}.xlsx")))
+write_xlsx(fmp_value,here("data_folder","main",glue("northeast_fmp_value_{vintage_string}.xlsx")))
