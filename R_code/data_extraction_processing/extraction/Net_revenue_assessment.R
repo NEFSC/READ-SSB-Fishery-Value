@@ -31,14 +31,17 @@ deflators<-deflators %>%
   select(-value)
 
 #setup oracle connection
+drv <- dbDriver("Oracle")
+DB__Connection<-dbConnect(drv, id, password=novapw, dbname=nefscusers.connect.string)
 sql_query<-glue("SELECT t.DOCID as VTR_TRIPID, t.CAMSID,
                 sum(NVL(t.VALUE,0)) as VALUE, sum(NVL(t.LIVLB,0)) as LIVLB, t.DATE_TRIP,
-                      t.Year, t.Month, t.Area, extract(YEAR from s.RECORD_LAND) as DB_lANDING_YEAR
+                      t.Year, t.Month, extract(YEAR from s.RECORD_LAND) as DB_lANDING_YEAR
                       from CAMS_LAND t, CAMS_SUBTRIP s
                       where t.VALUE is not NULL and t.YEAR between {START.YEAR} and {END.YEAR}
                       and t.CAMSID=s.CAMSID and t.SUBTRIP=s.SUBTRIP and t.ITIS_TSN != '079872'
-                      group by (t.DOCID, t.CAMSID, t.YEAR, t.MONTH, t.AREA, s.RECORD_LAND,t.DATE_TRIP)")
+                      group by (t.DOCID, t.CAMSID, t.YEAR, t.MONTH, s.RECORD_LAND,t.DATE_TRIP)")
 
+#pull in cams data. No oysters (079872).
 
 res <- dbSendQuery(DB__Connection,sql_query)
 CAMS_Trip_Revenue<- fetch(res) 
