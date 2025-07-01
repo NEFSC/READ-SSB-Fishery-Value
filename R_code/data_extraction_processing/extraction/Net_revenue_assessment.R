@@ -56,37 +56,32 @@ Costs4 <- read_excel(file.path(tripcost_folder,"2010-2023","2010_2023.xlsx"),she
 
 Observations <- nrow(CAMS_Trip_Revenue)
 
-CAMS_Trip_Revenue <- left_join(CAMS_Trip_Revenue,Costs1,by=c("VTR_TRIPID","DB_LANDING_YEAR"))
+CAMS_Trip_Revenue <- left_join(CAMS_Trip_Revenue,Costs4,by=c("CAMSID","YEAR"))
+if (nrow(CAMS_Trip_Revenue)!=Observations) { stop("Joining cost data increased number of observations")}
+
+CAMS_Trip_Revenue <- left_join(CAMS_Trip_Revenue,Costs3,by=c("CAMSID","YEAR"))
 if (nrow(CAMS_Trip_Revenue)!=Observations) { stop("Joining cost data increased number of observations")}
 
 CAMS_Trip_Revenue <- left_join(CAMS_Trip_Revenue,Costs2,by=c("VTR_TRIPID","DB_LANDING_YEAR"))
 if (nrow(CAMS_Trip_Revenue)!=Observations) { stop("Joining cost data increased number of observations")}
-CAMS_Trip_Revenue <- left_join(CAMS_Trip_Revenue,Costs3,by=c("CAMSID","YEAR"))
-if (nrow(CAMS_Trip_Revenue)!=Observations) { stop("Joining cost data increased number of observations")}
-CAMS_Trip_Revenue <- left_join(CAMS_Trip_Revenue,Costs4,by=c("CAMSID","YEAR"))
+
+CAMS_Trip_Revenue <- left_join(CAMS_Trip_Revenue,Costs1,by=c("VTR_TRIPID","DB_LANDING_YEAR"))
 if (nrow(CAMS_Trip_Revenue)!=Observations) { stop("Joining cost data increased number of observations")}
 
 
 CAMS_Trip_Revenue <- CAMS_Trip_Revenue %>%
-  mutate(TRIP_COST_NOMINALDOLS=TRIP_COST_NOMINALDOLS.x,
+  mutate(TRIP_COST_NOMINALDOLS=TRIP_COST_NOMINALDOLS_WINSOR.x,
          TRIP_COST_NOMINALDOLS=ifelse(is.na(TRIP_COST_NOMINALDOLS),
-                                    TRIP_COST_NOMINALDOLS.y,TRIP_COST_NOMINALDOLS),
+                                    TRIP_COST_NOMINALDOLS_WINSOR.y,TRIP_COST_NOMINALDOLS),
           TRIP_COST_NOMINALDOLS=ifelse(is.na(TRIP_COST_NOMINALDOLS),
-                                    TRIP_COST_NOMINALDOLS.x.x,TRIP_COST_NOMINALDOLS),
+                                    TRIP_COST_NOMINALDOLS_WINSOR.x.x,TRIP_COST_NOMINALDOLS),
           TRIP_COST_NOMINALDOLS=ifelse(is.na(TRIP_COST_NOMINALDOLS),
-                                    TRIP_COST_NOMINALDOLS.y.y,TRIP_COST_NOMINALDOLS),
-         qdate=lubridate::quarter(DATE_TRIP, 
-                            type = "quarter",
-                            fiscal_start = 1,
-                            with_year = TRUE)) %>%
-  left_join(deflators, by =c("qdate"="date")) %>%
-  mutate(Real_Revenue=VALUE/value,
-         Real_Cost=TRIP_COST_NOMINALDOLS/value,
-         Net_Revenue = Real_Revenue-Real_Cost,
-         EPU="Other",
-         EPU = ifelse(AREA %in% c(500, 510, 512:515), 'Gulf of Maine',EPU),
-         EPU = ifelse(AREA %in% c(521:526, 551, 552, 561, 562), 'Georges Bank',EPU),
-         EPU = ifelse(AREA %in% c(537, 539, 600, 612:616, 621, 622, 625, 626, 631, 632), 'Mid-Atlantic Bight',EPU))
+                                    TRIP_COST_NOMINALDOLS_WINSOR.y.y,TRIP_COST_NOMINALDOLS))%>%
+  left_join(deflators, by =c("YEAR"="year")) %>%
+  mutate(Real_Revenue=VALUE/fGDPDEF,
+         Real_Cost=TRIP_COST_NOMINALDOLS/fGDPDEF,
+         Net_Revenue = Real_Revenue-Real_Cost) %>%
+  select(c(VTR_TRIPID, CAMSID, VALUE, LIVLB, DATE_TRIP, YEAR, MONTH, Real_Revenue, Real_Cost, Net_Revenue))
 
 if (nrow(CAMS_Trip_Revenue)!=Observations) { stop("Joining cost data increased number of observations")}
 
