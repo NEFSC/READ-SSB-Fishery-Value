@@ -85,10 +85,11 @@ CAMS_Trip_Revenue <- CAMS_Trip_Revenue %>%
 
 if (nrow(CAMS_Trip_Revenue)!=Observations) { stop("Joining cost data increased number of observations")}
 
-save(CAMS_Trip_Revenue,
-     file="F:/MAFMC Risk Assessment/Profit/Net_revenue_data_CAMS_LAND")
+saveRDS(CAMS_Trip_Revenue,
+     file=here("data_folder", "main", glue("net_revenue_data_{vintage_string}.Rds")))
 
-load(file="F:/MAFMC Risk Assessment/Profit/Net_revenue_data_CAMS_LAND")
+readRDS(CAMS_Trip_Revenue,
+        file=here("data_folder", "main", glue("net_revenue_data_{vintage_string}.Rds")))
 
 Cost_Coverage <- CAMS_Trip_Revenue %>% 
   mutate(Missing= "Net Revenue Possible",
