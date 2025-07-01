@@ -13,16 +13,24 @@ here::i_am("R_code/data_extraction_processing/extraction/Net_revenue_assessment.
 
 START.YEAR=2021
 END.YEAR=2024
-drv <- dbDriver("Oracle")
+deflator_year<-2024
+
+tripcost_folder<-"//nefscdata/Trip_Costs/Trip_Cost_Estimates"
 
 vintage_string<-"2025-06-18"
 
-
+# read in deflator 
 deflators<-readRDS(file=here("data_folder","main",glue("deflators_{vintage_string}.Rds")))
 
+baseval<-deflators %>%
+  filter(year==deflator_year)%>%
+  pull(value)
 
-DB__Connection<-dbConnect(drv, id, password=novapw, dbname=nefscusers.connect.string)
+deflators<-deflators %>%
+  mutate(fGDPDEF=value/baseval)%>%
+  select(-value)
 
+#setup oracle connection
 sql_query<-glue("SELECT t.DOCID as VTR_TRIPID, t.CAMSID,
                 sum(NVL(t.VALUE,0)) as VALUE, sum(NVL(t.LIVLB,0)) as LIVLB, t.DATE_TRIP,
                       t.Year, t.Month, t.Area, extract(YEAR from s.RECORD_LAND) as DB_lANDING_YEAR
@@ -35,13 +43,13 @@ sql_query<-glue("SELECT t.DOCID as VTR_TRIPID, t.CAMSID,
 res <- dbSendQuery(DB__Connection,sql_query)
 CAMS_Trip_Revenue<- fetch(res) 
 
-Costs1 <- read_excel("D:/Trip_Cost_Estimates/2000-2009/2000_2009_Commercial_Fishing_Trip_Costs.xlsx",
-                     sheet=1)
-Costs2 <- read_excel("D:/Trip_Cost_Estimates/2000-2009/2000_2009_Commercial_Fishing_Trip_Costs.xlsx",
-                     sheet=2)
-Costs3 <- read_excel("D:/Trip_Cost_Estimates/2010-2023/2010_2023.xlsx",sheet=1)
-Costs4 <- read_excel("D:/Trip_Cost_Estimates/2010-2023/2010_2023.xlsx",sheet=2)
+# read in trip costs
 
+Costs1 <- read_excel(file.path(tripcost_folder,"2000-2009","2000_2009_Commercial_Fishing_Trip_Costs.xlsx"),sheet=1)
+Costs2 <- read_excel(file.path(tripcost_folder,"2000-2009","2000_2009_Commercial_Fishing_Trip_Costs.xlsx"),sheet=2)
+
+Costs3 <- read_excel(file.path(tripcost_folder,"2010-2023","2010_2023.xlsx"),sheet=1)
+Costs4 <- read_excel(file.path(tripcost_folder,"2010-2023","2010_2023.xlsx"),sheet=2)
 
 Observations <- nrow(CAMS_Trip_Revenue)
 
