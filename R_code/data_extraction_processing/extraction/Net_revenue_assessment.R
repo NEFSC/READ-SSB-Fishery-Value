@@ -93,20 +93,20 @@ load(file="F:/MAFMC Risk Assessment/Profit/Net_revenue_data_CAMS_LAND")
 Cost_Coverage <- CAMS_Trip_Revenue %>% 
   mutate(Missing= "Net Revenue Possible",
     Missing= ifelse(is.na(Real_Cost),"Missing Costs", Missing)) %>%
-  group_by(EPU,Missing,YEAR) %>%
+  group_by(Missing,YEAR) %>%
   summarise(Total_revenue=sum(Real_Revenue,na.rm = TRUE)) %>% ungroup()
 
 ggplot(Cost_Coverage,aes(x=YEAR,y=Total_revenue,fill=Missing))+
-  geom_bar(postion="stack",stat="identity")+facet_wrap(vars(EPU))
+  geom_bar(postion="stack",stat="identity")
 
 Net_revenue <- CAMS_Trip_Revenue %>%
-  group_by(YEAR, EPU) %>%
+  group_by(YEAR) %>%
     summarise(Net_Revenue =sum(Net_Revenue, na.rm=TRUE)) %>% ungroup()
 
 #Useful plots
 
 ggplot(Net_revenue, aes(x=YEAR,y=Net_Revenue))+
-  geom_line()+facet_wrap(vars(EPU))
+  geom_line()
 
 ggplot(CAMS_Trip_Revenue, aes(x=as.factor(YEAR),y=Net_Revenue, fill=as.factor(YEAR)))+
   geom_violin()+facet_wrap(vars(EPU))
