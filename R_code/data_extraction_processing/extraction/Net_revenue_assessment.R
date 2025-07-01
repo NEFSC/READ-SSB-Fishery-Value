@@ -2,44 +2,24 @@
 #Geret DePiper
 #February 11, 2025
 
+library("ROracle")
+library("glue")
+library("tidyverse")
+library("here")
+library("writexl")
+library("readxl")
 
+here::i_am("R_code/data_extraction_processing/extraction/Net_revenue_assessment.R")
 
-library(dplyr)
-library(tidyr)
-library(ROracle)
-library(knitr)
-library(dbplyr)
-library(here)
-library(readxl)
-library(fredr)
-
-here::here()
-
-START.YEAR=2000
+START.YEAR=2021
 END.YEAR=2024
 drv <- dbDriver("Oracle")
 
-deflators <- fredr(
-  series_id = "GDPDEF",
-  observation_start = as.Date("2000-01-01"),
-  observation_end = as.Date("2023-12-31"),
-  realtime_start =NULL,
-  realtime_end =NULL,
-  frequency = "q")
+vintage_string<-"2025-06-18"
 
-# Assign Quarters 
 
-deflators <- deflators %>%
-  dplyr::select(date,value) %>%
-  mutate(date = lubridate::quarter(date, 
-                                   type = "quarter",
-                                   fiscal_start = 1,
-                                   with_year = TRUE))
+deflators<-readRDS(file=here("data_folder","main",glue("deflators_{vintage_string}.Rds")))
 
-base_year_index <- deflators[deflators$date == "2023.1","value"] %>% as.numeric()
-
-deflators <- deflators %>%
-  mutate(value = value/(base_year_index))
 
 DB__Connection<-dbConnect(drv, id, password=novapw, dbname=nefscusers.connect.string)
 
