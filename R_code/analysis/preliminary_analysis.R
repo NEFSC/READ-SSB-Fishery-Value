@@ -12,9 +12,9 @@ here::i_am("R_code/data_extraction_processing/extraction/Net_revenue_assessment.
 # vintage_string<-"2025-06-18"
 
 vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("net_revenue_data_*Rds"))
-vintage_string<-gsub("net_revenue_data_","",data_vintage_string)
-vintage_string<-gsub(".Rds","",data_vintage_string)
-vintage_string<-max(data_vintage_string)
+vintage_string<-gsub("net_revenue_data_","",vintage_string)
+vintage_string<-gsub(".Rds","",vintage_string)
+vintage_string<-max(vintage_string)
 
 CAMS_Trip_Revenue<-readRDS(file=here("data_folder", "main", glue("net_revenue_data_{vintage_string}.Rds")))
 
