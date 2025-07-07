@@ -17,7 +17,14 @@ deflator_year<-2024
 
 tripcost_folder<-"//nefscdata/Trip_Costs/Trip_Cost_Estimates"
 
-vintage_string<-"2025-06-18"
+vintage_string<-Sys.Date()
+# hardcoded
+# deflator_vintage_string<-"2025-06-18"
+deflator_vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("deflators_*Rds"))
+deflator_vintage_string<-gsub("net_revenue_data_","",data_vintage_string)
+deflator_vintage_string<-gsub(".Rds","",data_vintage_string)
+deflator_vintage_string<-max(data_vintage_string)
+
 
 # read in deflator 
 deflators<-readRDS(file=here("data_folder","main",glue("deflators_{vintage_string}.Rds")))
@@ -87,88 +94,5 @@ if (nrow(CAMS_Trip_Revenue)!=Observations) { stop("Joining cost data increased n
 
 saveRDS(CAMS_Trip_Revenue,
      file=here("data_folder", "main", glue("net_revenue_data_{vintage_string}.Rds")))
-
-readRDS(CAMS_Trip_Revenue,
-        file=here("data_folder", "main", glue("net_revenue_data_{vintage_string}.Rds")))
-
-Cost_Coverage <- CAMS_Trip_Revenue %>% 
-  mutate(Missing= "Net Revenue Possible",
-    Missing= ifelse(is.na(Real_Cost),"Missing Costs", Missing)) %>%
-  group_by(Missing,YEAR) %>%
-  summarise(Total_revenue=sum(Real_Revenue,na.rm = TRUE)) %>% ungroup()
-
-ggplot(Cost_Coverage,aes(x=YEAR,y=Total_revenue,fill=Missing))+
-  geom_bar(postion="stack",stat="identity")
-
-Net_revenue <- CAMS_Trip_Revenue %>%
-  group_by(YEAR) %>%
-    summarise(Net_Revenue =sum(Net_Revenue, na.rm=TRUE)) %>% ungroup()
-
-#Useful plots
-
-ggplot(Net_revenue, aes(x=YEAR,y=Net_Revenue))+
-  geom_line()
-
-ggplot(CAMS_Trip_Revenue, aes(x=as.factor(YEAR),y=Net_Revenue, fill=as.factor(YEAR)))+
-  geom_violin()
-# 
-# Diesel <- read.csv(file=here("Weekly_New_York_Harbor_No._2_Heating_Oil_Spot_Price_FOB.csv"),
-#                      skip = 5, col.names=c("Date","Price"), header=FALSE) %>%
-#   mutate(Date = as.Date(Date,"%m/%d/%Y"),
-#          Week = strftime(Date, 
-#                          format = "%V"),
-#          YEAR = as.numeric(strftime(Date,
-#                          format="%Y")))
-# 
-# Missing_cost <- CAMS_Trip_Revenue %>% filter(is.na(Real_Cost)) %>% 
-#   mutate(Week = strftime(DATE_TRIP, 
-#                          format = "%V")) %>%
-#   left_join(Diesel) %>%
-#   mutate(Price=Price/value) %>%
-#   group_by(Date) %>%
-#   summarise(Real_Revenue=sum(Real_Revenue,na.rm=TRUE),
-#             Price=mean(Price, na.rm=TRUE)) %>% ungroup
-# 
-# plot(as.zoo(Missing_cost), 
-#      plot.type = "single", 
-#      lty = c(2, 1),
-#      lwd = 2,
-#      xlab = "Date",
-#      ylab = "Price",
-#      ylim = c(-5, 17),
-#      main = "Revenue vs. price")
-# 
-# # add the term spread series
-# lines(as.zoo(Missing_cost$Real_Revenue/100000000),
-#       col = "steelblue",
-#       lwd = 2,
-#       xlab = "Date",
-#       ylab = "Percent per annum",
-#       main = "Term Spread")
-# 
-# # shade the term spread
-# polygon(c(time(TB3MS), rev(time(TB3MS))), 
-#         c(TB10YS, rev(TB3MS)),
-#         col = alpha("steelblue", alpha = 0.3),
-#         border = NA)
-# 
-# # add horizontal line at 0
-# abline(0, 0)
-# 
-# # add a legend
-# legend("topright", 
-#        legend = c("TB3MS", "TB10YS", "Term Spread"),
-#        col = c("black", "black", "steelblue"),
-#        lwd = c(2, 2, 2),
-#        lty = c(2, 1, 1))
-# 
-# Missing_cost <- Missing_cost %>% filter(!is.na(Price))
-# 
-# Cointegration_1 <- ur.df(Missing_cost$Real_Revenue/100000000-Missing_cost$Price, 
-#       lags = 15, 
-#       selectlags = "AIC", 
-#       type = "drift")
-# summary(Cointegration_1)
-
 
 
