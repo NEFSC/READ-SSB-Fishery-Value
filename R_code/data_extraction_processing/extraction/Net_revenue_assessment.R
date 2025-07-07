@@ -1,6 +1,5 @@
-#Net Revenue Exploration
-#Geret DePiper
-#February 11, 2025
+# Code to pull Gross Revenues, Trip Costs, and Deflators, to assess Net Revenue 
+# Initially from Geret DePiper, February 11, 2025
 
 library("ROracle")
 library("glue")
@@ -27,7 +26,7 @@ deflator_vintage_string<-max(data_vintage_string)
 
 
 # read in deflator 
-deflators<-readRDS(file=here("data_folder","main",glue("deflators_{vintage_string}.Rds")))
+deflators<-readRDS(file=here("data_folder","main",glue("deflators_{deflator_vintage_string}.Rds")))
 
 baseval<-deflators %>%
   filter(year==deflator_year)%>%
