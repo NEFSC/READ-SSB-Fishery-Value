@@ -1,10 +1,9 @@
 ---
 title: "Profit_Assessment"
-author: "Geret DePiper"
-date: "2025-02-24"
-link-citations: yes
+author: "Min-Yang Lee"
+date: "`r format(Sys.time(), '%B %d, %Y')`" 
 output: 
-  bookdown::pdf_document2
+  bookdown::pdf_document2:
     toc: False
     fig_caption: yes
 ---
