@@ -80,7 +80,5 @@ ggplot(Net_revenue, aes(x=YEAR,y=Net_Revenue/1000000))+
 
 ```
 
-Although net revenue is the most-oft assessed metric of profitability in fisheries management, the fact that 25-50\% of trip revenue is excluded from this analysis has been a serious deficiency pointed out by both the SSC and Council, particularly through its Ecosystem and Ocean Planning Committee.
-
 
 ```
