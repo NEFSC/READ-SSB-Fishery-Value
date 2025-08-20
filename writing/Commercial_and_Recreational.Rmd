@@ -2,10 +2,18 @@
 title: "Commercial and Recreational Value"
 author: "Min-Yang Lee"
 date: "`r format(Sys.time(), '%B %d, %Y')`" 
-output: 
-  bookdown::pdf_document2:
-    toc: False
+output:
+  html_document:
+    df_print: paged
+    keep_md: yes
     fig_caption: yes
+params:
+  finished_switch:
+    value: placeholder
+    choices:
+    - placeholder
+    - finished
+
 ---
 
 ```{r setup, include=FALSE}
@@ -278,10 +286,15 @@ Effortmeans$se <- ceiling(Effortmeans$se)
 
 
 ```{r compute_rec_expenses}
-placeholder_cost<-50
-
+if (params$finished_switch=="placeholder"){
+  cost<-50
+} else if  (params$finished_switch=="finished") {
+  
+}
+    
+    
 Effort_totals<-Effortmeans %>%
-  mutate(value=placeholder_cost*dtrip) %>%
+  mutate(value=cost*dtrip) %>%
   group_by(year,target_tsn,area_name2) %>%
   summarise(recreational_value=sum(value))
 
@@ -294,5 +307,11 @@ All_Expenditures<-CAMS_revenue  %>%
   left_join(Effort_totals, by=join_by(year==year, itis_tsn==target_tsn, area_name2==area_name2)) %>%
   mutate(recreational_value=if_else(is.na(recreational_value),0,recreational_value))
 
+saveRDS(All_Expenditures, file=here("data_folder","main",glue("All_expenditures_{params$finished_switch}_{vintage_string}.Rds")))
+
+
 ```
+
+
+
 
