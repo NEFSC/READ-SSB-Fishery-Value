@@ -257,7 +257,7 @@ table(REC_DATA$missing, REC_DATA$target_common)
 ```
 
 
-```{r compute}
+```{r compute_trips}
 
 Effortdesign <- svydesign(
   ids = ~psu_id, 
@@ -274,7 +274,25 @@ Effortmeans <- svyby(~dtrip, by=~year+target_tsn+mode_fc+area_name2,
 Effortmeans$dtrip <- ceiling(Effortmeans$dtrip)
 Effortmeans$se <- ceiling(Effortmeans$se)
 
+```
 
+
+```{r compute_rec_expenses}
+placeholder_cost<-50
+
+Effort_totals<-Effortmeans %>%
+  mutate(value=placeholder_cost*dtrip) %>%
+  group_by(year,target_tsn,area_name2) %>%
+  summarise(recreational_value=sum(value))
+
+```
+
+
+```{r merge_to_commercial}
+
+All_Expenditures<-CAMS_revenue  %>%
+  left_join(Effort_totals, by=join_by(year==year, itis_tsn==target_tsn, area_name2==area_name2)) %>%
+  mutate(recreational_value=if_else(is.na(recreational_value),0,recreational_value))
 
 ```
 
