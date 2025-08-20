@@ -27,6 +27,7 @@ library(survey)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
 
+options(scipen=999)
 
 options(survey.lonely.psu = "certainty")
 
@@ -254,6 +255,8 @@ REC_DATA<-REC_DATA %>%
 table(REC_DATA$missing, REC_DATA$target_common)
 
 ```
+
+
 ```{r compute}
 
 Effortdesign <- svydesign(
@@ -264,7 +267,7 @@ Effortdesign <- svydesign(
   nest=TRUE
 )
 
-Effortmeans <- svyby(~dtrip, by=~year+target_tsn+area_name2,
+Effortmeans <- svyby(~dtrip, by=~year+target_tsn+mode_fc+area_name2,
                      svytotal,
                      design=Effortdesign)
 
