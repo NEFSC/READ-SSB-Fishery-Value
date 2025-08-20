@@ -1,0 +1,277 @@
+---
+title: "Commercial and Recreational Value"
+author: "Min-Yang Lee"
+date: "`r format(Sys.time(), '%B %d, %Y')`" 
+output: 
+  bookdown::pdf_document2:
+    toc: False
+    fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(comment = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+library(here)
+library(tidyverse)
+library(data.table)
+library(reshape2)
+library(ggpubr)
+library(kableExtra)
+library(glue)
+library(survey)
+
+library(conflicted)
+conflicts_prefer(dplyr::filter)
+
+
+options(survey.lonely.psu = "certainty")
+
+```
+
+
+```{r readin_commercial_data, include=FALSE}
+here::i_am("writing/Commercial_and_Recreational.Rmd")
+
+vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("species_area_landings_*Rds"))
+vintage_string<-gsub("species_area_landings_","",vintage_string)
+vintage_string<-gsub(".Rds","",vintage_string)
+vintage_string<-max(vintage_string)
+
+CAMS_revenue<-readRDS(file=here("data_folder", "main", glue("species_area_landings_{vintage_string}.Rds")))
+stock_area_definitions<-readRDS(file=here("data_folder", "main", glue("stock_area_definitions_{vintage_string}.Rds")))
+fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage_string}.Rds")))
+
+```
+
+## Introduction
+
+This document describes how we compute Gross Revenues for Commercial and Gross expenditures for Recreational at the stock level.
+
+# Data
+
+
+
+
+## Gross Revenues for Commercial
+
+Gross revenues were extracted from CAMS and aggregated to the stockarea. We do some minor datacleaning by aggregating the cams stock areas to their stock assessment counterparts.  The definition of a 'stock' is pulled from stockeff for the species in there. For others, we used the stock assessment and relevant fishery managment documents.
+
+```{r dataclean_commercial}
+
+# Pull in stock area definitions.  Drop out landings from Canada or the 700s.
+
+
+CAMS_revenue<-CAMS_revenue %>%
+  left_join(stock_area_definitions, by=join_by(itis_tsn==itis_tsn, area==area))%>%
+  mutate(area=as.numeric(area))%>%
+  filter(area<639 & area>=464) %>%
+  filter(!area %in% c(466,467,511,552))%>%
+  mutate(missing=is.na(area_name2))
+# There is still a little slop, A bit of skates that do not match. 
+#table(CAMS_revenue$itis_name, CAMS_revenue$missing)
+
+# Some do not have a definition. Classify those as unit stocks
+CAMS_revenue<-CAMS_revenue %>%
+  mutate(area_name2=if_else(is.na(area_name2),"Unit",area_name2))%>%
+  select(-c(common_name, area_name))
+
+
+# Aggregate
+CAMS_revenue<-CAMS_revenue%>%
+  group_by(council, itis_name, itis_tsn, area_name2, itis_sci_name, fmp, year) %>%
+  summarise(commercial_value=sum(value),
+            commercial_landed_pounds=sum(landings)) %>%
+  ungroup() %>%
+  filter(year>=2021 & year<=2024)
+
+```
+
+
+```{r keyfiles}
+stock_keyfile<-CAMS_revenue %>%
+  select(c(council, fmp, itis_name, area_name2)) %>%
+  group_by(council, fmp, itis_name, area_name2) %>% 
+    slice(1) %>%
+  ungroup() %>%
+  arrange(council,fmp, itis_name, area_name2)
+
+ASFMC<-stock_keyfile %>%
+  filter(council == "ASMFC" | council=="ASMFC/NEFMC")
+
+
+MAFMC<-stock_keyfile %>%
+  filter(council == "MAFMC" | council=="MAFMC/NEFMC")
+
+NEFMC<-stock_keyfile %>%
+  filter(council == "NEFMC" | council=="MAFMC/NEFMC"  | council=="ASMFC/NEFMC")
+
+```
+
+```{r ASFMC_stocks}
+ knitr::kable(ASFMC %>% select(-council), caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+
+```{r MAFMC_stocks}
+ knitr::kable(MAFMC  %>% select(-council), caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+
+```{r NEFMC_stocks}
+
+ knitr::kable(NEFMC  %>% select(-council), caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+
+
+
+## Expenditures for Recreational
+
+```{r Prepare_sites}
+# load in the MRIP site list
+site_list<-readRDS(file=here("data_folder","raw","mrip_sites.Rds"))
+
+site_list<-site_list %>%
+    rename_with(tolower)%>%
+  select(intsite,nmfs_stat_area, state_code, county_code)
+
+
+
+
+Tripdata<-readRDS(file=here("data_folder","raw","rectrip_2026.Rds"))
+
+Tripdata <- Tripdata %>% 
+  mutate(var_id = ifelse(var_id=="",strat_id,var_id),
+         mode_fc = mode_fx,
+         mode_fc= ifelse(mode_fc%in%c("5","6"),"4",mode_fc)) %>%
+  select(strat_id,
+                psu_id,
+                id_code,
+                st,
+                cnty,
+                intsite,
+                wave,
+                mode_fc,
+                var_id,
+                region, 
+                sub_reg,
+                wp_int,
+                year, 
+                intsite,
+                tsn1,
+                tsn2, 
+              prim1_common,
+             prim2_common) 
+
+Tripdata  <- Tripdata %>% 
+  arrange(strat_id, psu_id, id_code) 
+
+# Filter on tsn1 or tsn2 being in our 'list of species' just coalese them into 1.
+tsns<-fmp_listing %>%
+  pull(itis_tsn)
+
+Tripdata  <- Tripdata %>% 
+  filter(tsn1 %in% tsns | tsn2 %in% tsns)
+
+Tripdata  <- Tripdata %>% 
+  mutate(target_tsn=case_when(
+    tsn1 %in% tsns ~ tsn1,
+    tsn2 %in% tsns ~ tsn2 )
+  ) %>%
+  mutate(target_common=case_when(
+    tsn1 %in% tsns ~ prim1_common,
+    tsn2 %in% tsns ~ prim2_common )
+)
+
+
+
+
+# assign to statistical areas
+Tripdata  <- Tripdata %>% 
+  left_join(site_list, by=join_by(st==state_code, cnty==county_code,intsite==intsite))
+
+# Filter for just NC to ME
+REC_DATA <- Tripdata %>% 
+  filter(sub_reg %in% c(4,5) | st==37) %>%
+  filter(year >=2021 & year<=2024) %>%
+  mutate(dtrip=1,
+         mode_fc=factor(mode_fc,levels=c("3","4","7"),
+                        labels=c("Shore","Party_Charter","Private_Rental")),
+         Region=factor(sub_reg,levels=c("4","5","6"),
+                       labels=c("NE","MA", "NC")))
+
+# Add in the stock area definitions
+REC_DATA<-REC_DATA %>%
+  left_join(stock_area_definitions, by=join_by(target_tsn==itis_tsn, nmfs_stat_area==area))
+
+
+
+REC_DATA<-REC_DATA %>%
+  mutate(missing=is.na(area_name2))
+# look at the missing area_name2
+table(REC_DATA$missing, REC_DATA$target_common)
+#It's not too bad, the only one that has any missing==FALSE and 2 stock areas is Black Sea Bass.
+# We can deal with it based on state.
+# 
+# test<-REC_DATA %>% 
+#   filter(missing==TRUE & target_common=="BLACK SEA BASS")
+# test2<-REC_DATA %>% 
+#   filter(missing==FALSE & target_common=="BLACK SEA BASS")
+
+#Black sea bass
+REC_DATA<-REC_DATA %>%
+  mutate(area_name2 = case_when(
+    target_tsn==167687 & st %in% c(9,25,33,44) & is.na(area_name2)~ "NORTH",
+    target_tsn==167687 & st %in% c(10,24,36,37, 51)  & is.na(area_name2) ~ "SOUTH",
+    target_tsn==167687 & st ==34 & cnty %in% c(3,13,17,23,39)  & is.na(area_name2) ~ "NORTH",
+    target_tsn==167687 & st ==34 & cnty %in% c(1,5,9,11,29)  & is.na(area_name2)~ "SOUTH",
+    .default = area_name2  )
+  )
+           
+
+
+
+#Lone red hake
+REC_DATA<-REC_DATA %>%
+  mutate(area_name2 = case_when(
+    target_tsn==164730 & st %in% c(10,24,36,37, 51)  & is.na(area_name2) ~ "SOUTHERN",
+    .default = area_name2  )
+  )
+           
+REC_DATA<-REC_DATA %>%
+  mutate(area_name2 = case_when(
+    is.na(area_name2)~ "Unit",
+  .default = area_name2  )
+)
+
+REC_DATA<-REC_DATA %>%
+  mutate(missing=is.na(area_name2))
+
+table(REC_DATA$missing, REC_DATA$target_common)
+
+```
+```{r compute}
+
+Effortdesign <- svydesign(
+  ids = ~psu_id, 
+  strata = ~var_id, # Specify the strata variable
+  weights = ~wp_int, # Specify the weight variable
+  data = REC_DATA,
+  nest=TRUE
+)
+
+Effortmeans <- svyby(~dtrip, by=~year+target_tsn+area_name2,
+                     svytotal,
+                     design=Effortdesign)
+
+Effortmeans$dtrip <- ceiling(Effortmeans$dtrip)
+Effortmeans$se <- ceiling(Effortmeans$se)
+
+
+
+```
+
