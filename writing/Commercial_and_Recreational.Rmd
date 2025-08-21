@@ -13,6 +13,8 @@ params:
     choices:
     - placeholder
     - finished
+  deflate_year:
+    value: 2024
 
 ---
 
@@ -31,20 +33,41 @@ library(ggpubr)
 library(kableExtra)
 library(glue)
 library(survey)
-
+library(fredr)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
-
+conflicts_prefer(lubridate::year)
+conflicts_prefer(dplyr::summarise)
+conflicts_prefer(dplyr::arrange)
 options(scipen=999)
-
 options(survey.lonely.psu = "certainty")
+
+here::i_am("writing/Commercial_and_Recreational.Rmd")
+
 
 ```
 
+```{r extract_data, eval=FALSE, include=FALSE}
 
-```{r readin_commercial_data, include=FALSE}
-here::i_am("writing/Commercial_and_Recreational.Rmd")
+#Some of the data prep takes a long time. 
+#Instead of pulling data every time I want to compile this doc, I have split off the code to do so into the following pieces.
 
+# Get GDP implicit price deflators
+source(here("R_code", "data_extraction_processing", "extraction","FRED_extraction.R"))
+
+
+# Get commercial data
+source(here("R_code", "data_extraction_processing", "extraction","fmp_value_datapull.R"))
+
+# Get MRIP sites
+source(here("R_code", "data_extraction_processing", "extraction","MRIP_sites.R"))
+
+     
+# Get MRIP catch and effort data
+source(here("R_code", "data_extraction_processing", "extraction","MRIP_Data_Extraction.R"))
+```
+
+```{r readin_data, include=FALSE}
 vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("species_area_landings_*Rds"))
 vintage_string<-gsub("species_area_landings_","",vintage_string)
 vintage_string<-gsub(".Rds","",vintage_string)
@@ -53,6 +76,26 @@ vintage_string<-max(vintage_string)
 CAMS_revenue<-readRDS(file=here("data_folder", "main", glue("species_area_landings_{vintage_string}.Rds")))
 stock_area_definitions<-readRDS(file=here("data_folder", "main", glue("stock_area_definitions_{vintage_string}.Rds")))
 fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage_string}.Rds")))
+
+# load in the MRIP site list
+site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{vintage_string}.Rds")))
+# Read in trip data
+Tripdata<-readRDS(file=here("data_folder","raw",glue("rectrip_{vintage_string}.Rds")))
+
+# Read in Deflators
+deflators<-readRDS(file=here("data_folder","raw",glue("deflators_{vintage_string}.Rds")))
+```
+
+```{r process_deflators, include=FALSE}
+
+deflate_base<-deflators %>%
+  filter(year==params$deflate_year)%>%
+  pull(value)
+
+# multiply a NOMINAL value by the deflation multiplier to get REAL 'base-year' dollars
+deflators<-deflators %>%
+  mutate(deflation_multiplier  = deflate_base/value) %>%
+  select(year,series_id,deflation_multiplier)
 
 ```
 
@@ -150,9 +193,6 @@ Recreational expenditures are computed based on trips and the first target speci
 
 ```{r Prepare_sites}
 
-# load in the MRIP site list
-site_list<-readRDS(file=here("data_folder","raw","mrip_sites.Rds"))
-
 # lower case the columns and keep just the ones I need 
 site_list<-site_list %>%
     rename_with(tolower)%>%
@@ -166,9 +206,6 @@ site_list<-site_list %>%
 # Assign statistical areas
 # Use statistical areas to assign to stock areas
 
-
-# Read in trip data
-Tripdata<-readRDS(file=here("data_folder","raw","rectrip_2026.Rds"))
 
 # fix the var_id
 # create a binned mode that aggregates the for-hire together
@@ -242,7 +279,7 @@ Tripdata  <- Tripdata %>%
 
 REC_DATA <- Tripdata %>% 
   filter(sub_reg %in% c(4,5) | st==37) %>%
-  filter(year >=2021 & year<=2024) %>%
+  filter(year >=2021 & year<=2024) 
 
 # Create the directed trip indicator, convert the mode and Region variables to factors.    
 REC_DATA<-REC_DATA %>%  
@@ -302,7 +339,7 @@ REC_DATA<-REC_DATA %>%
 REC_DATA<-REC_DATA %>%
   mutate(missing=is.na(area_name2))
 
-table(REC_DATA$missing, REC_DATA$target_common)
+table(REC_DATA$missing)
 
 ```
 
