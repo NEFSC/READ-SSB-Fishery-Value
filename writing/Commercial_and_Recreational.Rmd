@@ -207,29 +207,9 @@ Tripdata  <- Tripdata %>%
 tsns<-fmp_listing %>%
   pull(itis_tsn)
 
-# Filter on tsn1 or tsn2 being in our 'list of species' just coalese them into 1.
+# Filter on tsn1 in our 'list of species'.
 Tripdata  <- Tripdata %>% 
-  filter(tsn1 %in% tsns | tsn2 %in% tsns)
-
-# create 'target_tsn' and 'target_common'. Basically, this allocates all the effort 
-# on a trip to tsn1 if it's in our list. If it's not, it allocates all the effort to tsn2.
-# This will cause some double-counting across regions or with species that are not in my list
-# For example, if a trip has tsn1=king mackerel and tsn2= black sea bass, I'm calling it a black 
-# sea bass trip. But the southeast region might call it a king mackerel trip.
-
-# no double counting if tsn1=summer flounder and tsn2=black sea bass 
-
-Tripdata  <- Tripdata %>% 
-  mutate(target_tsn=case_when(
-    tsn1 %in% tsns ~ tsn1,
-    tsn2 %in% tsns ~ tsn2 )
-  ) %>%
-  mutate(target_common=case_when(
-    tsn1 %in% tsns ~ prim1_common,
-    tsn2 %in% tsns ~ prim2_common )
-)
-
-
+  filter(tsn1 %in% tsns)
 
 
 # assign to statistical areas
@@ -254,7 +234,7 @@ REC_DATA<-REC_DATA %>%
 
 # Add in the stock area definitions, which area at the itis_tsn and statistical area.
 REC_DATA<-REC_DATA %>%
-  left_join(stock_area_definitions, by=join_by(target_tsn==itis_tsn, nmfs_stat_area==area))
+  left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area))
 
 ```
 
@@ -264,7 +244,7 @@ The stock areas from CAMS are a bit messy, it doesn't actually include everythin
 REC_DATA<-REC_DATA %>%
   mutate(missing=is.na(area_name2))
 # look at the missing area_name2
-table(REC_DATA$missing, REC_DATA$target_common)
+table(REC_DATA$missing, REC_DATA$prim1_common)
 #It's not too bad, the only one that has any missing==FALSE and 2 stock areas is Black Sea Bass.
 # We can deal with it based on state.
 # 
@@ -276,20 +256,18 @@ table(REC_DATA$missing, REC_DATA$target_common)
 #Black sea bass
 REC_DATA<-REC_DATA %>%
   mutate(area_name2 = case_when(
-    target_tsn==167687 & st %in% c(9,25,33,44) & is.na(area_name2)~ "NORTH",
-    target_tsn==167687 & st %in% c(10,24,36,37, 51)  & is.na(area_name2) ~ "SOUTH",
-    target_tsn==167687 & st ==34 & cnty %in% c(3,13,17,23,39)  & is.na(area_name2) ~ "NORTH",
-    target_tsn==167687 & st ==34 & cnty %in% c(1,5,9,11,29)  & is.na(area_name2)~ "SOUTH",
+    tsn1==167687 & st %in% c(9,25,33,44) & is.na(area_name2)~ "NORTH",
+    tsn1==167687 & st %in% c(10,24,36,37, 51)  & is.na(area_name2) ~ "SOUTH",
+    tsn1==167687 & st ==34 & cnty %in% c(3,13,17,23,39)  & is.na(area_name2) ~ "NORTH",
+    tsn1==167687 & st ==34 & cnty %in% c(1,5,9,11,29)  & is.na(area_name2)~ "SOUTH",
     .default = area_name2  )
   )
-           
-
 
 
 #Lone red hake
 REC_DATA<-REC_DATA %>%
   mutate(area_name2 = case_when(
-    target_tsn==164730 & st %in% c(10,24,36,37, 51)  & is.na(area_name2) ~ "SOUTHERN",
+    tsn1==164730 & st %in% c(10,24,36,37, 51)  & is.na(area_name2) ~ "SOUTHERN",
     .default = area_name2  )
   )
            
@@ -321,8 +299,8 @@ Effortdesign <- svydesign(
   nest=TRUE
 )
 
-Effortmeans <- svyby(~dtrip, by=~year+target_tsn+mode_fc+area_name2,
 # Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
+Effortmeans <- svyby(~dtrip, by=~year+tsn1+mode_fc+area_name2,
                      svytotal,
                      design=Effortdesign)
 
@@ -337,14 +315,13 @@ Effortmeans$se <- ceiling(Effortmeans$se)
 if (params$finished_switch=="placeholder"){
   cost<-50
 } else if  (params$finished_switch=="finished") {
-  
   # This will require a join to the 2022 expenditure survey data. 
 }
     
     
 Effort_totals<-Effortmeans %>%
   mutate(value=cost*dtrip) %>%
-  group_by(year,target_tsn,area_name2) %>%
+  group_by(year,tsn1,area_name2) %>%
   summarise(recreational_value=sum(value))
 
 ```
@@ -357,7 +334,7 @@ Join the commercial to the recreational data and save
 ```{r merge_to_commercial}
 
 All_Expenditures<-CAMS_revenue  %>%
-  left_join(Effort_totals, by=join_by(year==year, itis_tsn==target_tsn, area_name2==area_name2)) %>%
+  left_join(Effort_totals, by=join_by(year==year, itis_tsn==tsn1, area_name2==area_name2)) %>%
   mutate(recreational_value=if_else(is.na(recreational_value),0,recreational_value))
 
 saveRDS(All_Expenditures, file=here("data_folder","main",glue("All_expenditures_{params$finished_switch}_{vintage_string}.Rds")))
