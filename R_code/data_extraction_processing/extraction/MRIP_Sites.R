@@ -22,9 +22,7 @@ here::i_am("R_code/data_extraction_processing/extraction/MRIP_Sites.R")
 
 site_list<-dbGetQuery(nova_conn, new_site_list)
 
-saveRDS(site_list, file=here("data_folder","raw","mrip_sites.Rds"))
-
-
+saveRDS(site_list, file=here("data_folder","raw",glue("mrip_sites_{vintage_string}.Rds")))
 
 
 

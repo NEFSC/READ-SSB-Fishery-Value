@@ -1,6 +1,6 @@
 library(here)
 library(plyr)
-
+library(haven)
 library(tidyverse)
 library(glue)
 library(conflicted)
@@ -9,7 +9,8 @@ conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::mutate)
 conflicts_prefer(dplyr::select)
 
-                
+vintage_string<-format(Sys.Date())
+
 #Current year is not complete nor final, so should be dropped
 Incomplete_year=2025
 
@@ -41,7 +42,7 @@ Tripdata <- ldply(filelist, function(x) {
   return(temp)
 })
 
-saveRDS(Tripdata, file=here("data_folder","raw","rectrip_2026.Rds"))
+saveRDS(Tripdata, file=here("data_folder","raw",glue("rectrip_{vintage_string}.Rds")))
 
 
 
@@ -70,9 +71,7 @@ Catchdata <- ldply(filelist, function(x) {
   names(temp) <- tolower(names(temp))
   return(temp)
 })
-saveRDS(Catchdata, file=here("data_folder","raw","reccatch_2026.Rds"))
-
-
+saveRDS(Catchdata, file=here("data_folder","raw",glue("reccatch_{vintage_string}.Rds")))
 
 
 
