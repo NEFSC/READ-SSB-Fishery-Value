@@ -19,7 +19,7 @@ Incomplete_year=2025
 mrip_location <- file.path("/home/mlee/mrfss/products/mrip_estim/Public_data_cal2018")
 
 filelist <- list.files(file.path(mrip_location), 
-                       pattern=glob2rx("trip_202*.sas7bdat"),
+                       pattern=glob2rx("trip_20*.sas7bdat"),
                        full.names = TRUE) 
 here::i_am("R_code/data_extraction_processing/extraction/MRIP_Data_Extraction.R")
 
@@ -53,25 +53,25 @@ saveRDS(Tripdata, file=here("data_folder","raw",glue("rectrip_{vintage_string}.R
 # Read in Catch data and save it to an Rds
 #################################################################################
 #################################################################################
-
-
-filelist <- list.files(file.path(mrip_location), 
-                       pattern=glob2rx("catch_202*.sas7bdat"),
-                       full.names = TRUE) 
-filelist <- filelist[!grepl("orig*",filelist)]
-filelist <- filelist[!grepl("Copy*",filelist)]
-filelist <- filelist[!grepl("bak*",filelist)]
-filelist <- filelist[!grepl("delete*",filelist)]
-filelist <- filelist[!grepl("catch_1981",filelist)]
-filelist <- filelist[!grepl(paste0("catch_",Incomplete_year,sep=""),filelist)]
-filelist <- filelist[!grepl("1.sas7bdat",filelist)]
-
-Catchdata <- ldply(filelist, function(x) {
-  temp <- read_sas(x)
-  names(temp) <- tolower(names(temp))
-  return(temp)
-})
-saveRDS(Catchdata, file=here("data_folder","raw",glue("reccatch_{vintage_string}.Rds")))
+# 
+# 
+# filelist <- list.files(file.path(mrip_location), 
+#                        pattern=glob2rx("catch_20*.sas7bdat"),
+#                        full.names = TRUE) 
+# filelist <- filelist[!grepl("orig*",filelist)]
+# filelist <- filelist[!grepl("Copy*",filelist)]
+# filelist <- filelist[!grepl("bak*",filelist)]
+# filelist <- filelist[!grepl("delete*",filelist)]
+# filelist <- filelist[!grepl("catch_1981",filelist)]
+# filelist <- filelist[!grepl(paste0("catch_",Incomplete_year,sep=""),filelist)]
+# filelist <- filelist[!grepl("1.sas7bdat",filelist)]
+# 
+# Catchdata <- ldply(filelist, function(x) {
+#   temp <- read_sas(x)
+#   names(temp) <- tolower(names(temp))
+#   return(temp)
+# })
+# saveRDS(Catchdata, file=here("data_folder","raw",glue("reccatch_{vintage_string}.Rds")))
 
 
 
