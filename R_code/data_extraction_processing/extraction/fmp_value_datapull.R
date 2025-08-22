@@ -8,7 +8,7 @@ here::i_am("R_code/data_extraction_processing/extraction/fmp_value_datapull.R")
 
 vintage_string<-format(Sys.Date())
 
-year_start<-2021
+year_start<-2004
 year_end<-2024
 
 ################################################################################
