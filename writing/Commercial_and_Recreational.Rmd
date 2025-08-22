@@ -77,6 +77,10 @@ CAMS_revenue<-readRDS(file=here("data_folder", "main", glue("species_area_landin
 stock_area_definitions<-readRDS(file=here("data_folder", "main", glue("stock_area_definitions_{vintage_string}.Rds")))
 fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage_string}.Rds")))
 
+#landings and value for non northeast managed species.
+non_NEM_landings<-readRDS(file=here("data_folder","main",glue("Other_species_landings_{vintage_string}.Rds")))
+
+
 # load in the MRIP site list
 site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{vintage_string}.Rds")))
 # Read in trip data
@@ -132,8 +136,21 @@ CAMS_revenue<-CAMS_revenue%>%
   group_by(council, itis_name, itis_tsn, area_name2, itis_sci_name, fmp, year) %>%
   summarise(commercial_value=sum(value),
             commercial_landed_pounds=sum(landings)) %>%
+  ungroup()
+
+
+non_NEM_landings<-non_NEM_landings %>%
+  select(council, itis_name, itis_tsn, itis_sci_name, fmp, year) %>%
+    group_by(council, itis_name, itis_tsn, itis_sci_name, fmp, year) %>%
+  summarise(commercial_value=sum(value),
+            commercial_landed_pounds=sum(landings)) %>%
   ungroup() %>%
-  filter(year>=2021 & year<=2024)
+  mutate(area_name2="Unit")
+
+CAMS_revenue<-rbind(CAMS_revenue,non_NEM_landings)
+CAMS_revenue<-CAMS_revenue %>%
+  arrange(council, itis_name, itis_tsn, itis_sci_name, fmp, year)
+
 
 ```
 
@@ -237,6 +254,10 @@ Tripdata <- Tripdata %>%
 Tripdata  <- Tripdata %>% 
   arrange(strat_id, psu_id, id_code) 
 
+
+Tripdata  <- Tripdata %>% 
+  filter(year>=2004)
+
 ##############################################################
 # Keep rows that are among the species that we are interested in.  
 
@@ -273,11 +294,16 @@ REC_DATA<-REC_DATA %>%
 REC_DATA<-REC_DATA %>%
   left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area))
 
+saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
+
 ```
 
 The stock areas from CAMS are a bit messy, it doesn't actually include everything. 
 
 ```{r data_clean_stockarea}
+
+#REC_DATA<-readRDS(file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
+
 REC_DATA<-REC_DATA %>%
   mutate(missing=is.na(area_name2))
 # look at the missing area_name2
