@@ -175,6 +175,15 @@ Recreational expenditures are computed based on trips and the first target speci
 site_list<-site_list %>%
     rename_with(tolower)%>%
   select(intsite,nmfs_stat_area, state_code, county_code)
+
+
+county_list<-site_list %>%
+  group_by(state_code, county_code) %>%
+  count(nmfs_stat_area)%>%
+  arrange(state_code, county_code, n) %>%
+  select(state_code,county_code,nmfs_stat_area) %>%
+  rename(nmfs_stat_areaC=nmfs_stat_area)
+
 ```
 
 ```{r read_and_prepTripdata}
@@ -236,52 +245,80 @@ tsns<-fmp_listing %>%
   mutate(in_fmp_keyfile=1)
 
 # Inner join to the keyfile to keep just the trips that are in the fmp listing 
-Tripdata2  <- Tripdata %>% 
+Tripdata  <- Tripdata %>% 
   inner_join(tsns, by=join_by(tsn1==itis_tsn))
 
+```
+
+
+
+
+```{r join_to_statistical}
 
 # assign to statistical areas
 # state, county, and intsite are needed to uniquely join.
 Tripdata  <- Tripdata %>% 
   left_join(site_list, by=join_by(st==state_code, cnty==county_code,intsite==intsite))
 
-# Create the directed trip indicator, convert the mode and Region variables to factors.    
-REC_DATA<-Tripdata %>%  
-  mutate(dtrip=1,
-         mode_fc=factor(mode_fc,levels=c("3","4","7"),
-                        labels=c("Shore","Party_Charter","Private_Rental")),
-         Region=factor(sub_reg,levels=c("4","5","6"),
-                       labels=c("NE","MA", "NC")))
+# use the most prevalent stat area by county in case there are missing intsites
+Tripdata  <- Tripdata %>% 
+  left_join(county_list, by=join_by(st==state_code, cnty==county_code))
+
+# merge update
+Tripdata<-Tripdata %>%
+  mutate(nmfs_stat_area=if_else(is.na(nmfs_stat_area), nmfs_stat_areaC,nmfs_stat_area)) %>%
+  select(-nmfs_stat_areaC)
+```
+
+
+
+```{r join_to_stock_definitions}
 
 # Add in the stock area definitions, which area at the itis_tsn and statistical area.
-REC_DATA<-REC_DATA %>%
+REC_DATA<-Tripdata %>%
   left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area))
 
 
-
+# Just mark anything that is not in our area as "Unit"
+# test2<-REC_DATA %>%
+#   filter(fmp %in% "No Federal FMP")
 # 
+# table(test2$prim1_common)
+
+
+# Fill in missing stockareas for things that are not NER managed with "Unit"
 REC_DATA<-REC_DATA %>%
-  mutate(stockarea = case_when(
-         itis_tsn %in% out_of_area_species ~ "Unit",
-         .default=stockarea)
-)
+   mutate(stockarea = case_when(
+          fmp %in% "No Federal FMP" & is.na(stockarea)~ "Unit",
+          .default=stockarea)
+ )
 
 
-saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
+# test3<-REC_DATA %>%
+#    filter(is.na(stockarea)) %>%
+#   group_by(prim1_common) %>%
+#   slice(1) %>%
+#   pull(prim1_common)
+# test3<-REC_DATA %>%
+#    filter(is.na(stockarea) & prim1_common=="WINDOWPANE") %>%
+#   group_by(prim1_common) 
+# 
+# 
+# saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
 
 ```
 
-The stock areas from CAMS are a bit messy, it doesn't actually include everything. 
-
-```{r data_clean_stockarea}
-
+```{r placeholder_handle}
+#REC_DATA<-readRDS(file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
 if (params$finished_switch == "placeholder") {
   REC_DATA<-REC_DATA %>%
     filter(year>=2006)
 }
+```
 
 
-#REC_DATA<-readRDS(file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
+```{r data_clean_stockarea}
+
 
 REC_DATA<-REC_DATA %>%
   mutate(missing=is.na(stockarea))
@@ -295,10 +332,6 @@ table(REC_DATA$prim1_common,REC_DATA$missing)
 # test2<-REC_DATA %>% 
 #   filter(missing==FALSE & target_common=="BLACK SEA BASS")
 
-
- test2<-REC_DATA %>% 
-   filter(missing==TRUE & prim1_common=="ATLANTIC COD")
-
 #Black sea bass
 REC_DATA<-REC_DATA %>%
   mutate(stockarea = case_when(
@@ -306,6 +339,15 @@ REC_DATA<-REC_DATA %>%
     tsn1==167687 & st %in% c(10,24,36,37, 51)  & is.na(stockarea) ~ "SOUTH",
     tsn1==167687 & st ==34 & cnty %in% c(3,13,17,23,39)  & is.na(stockarea) ~ "NORTH",
     tsn1==167687 & st ==34 & cnty %in% c(1,5,9,11,29)  & is.na(stockarea)~ "SOUTH",
+    tsn1==172746 & st ==37 & is.na(stockarea)~ "SNEMA",
+
+    .default = stockarea  )
+  )
+
+# Lone Windowpane
+REC_DATA<-REC_DATA %>%
+  mutate(stockarea = case_when(
+    tsn1==172746 & st ==37 & is.na(stockarea)~ "SNEMA",
     .default = stockarea  )
   )
 
@@ -316,6 +358,16 @@ REC_DATA<-REC_DATA %>%
     tsn1==164730 & st %in% c(10,24,36,37, 51)  & is.na(stockarea) ~ "SOUTHERN",
     .default = stockarea  )
   )
+
+
+
+# Random Acadian Redfish, which is probably Red Drum 
+REC_DATA<-REC_DATA %>%
+  mutate(stockarea = case_when(
+    tsn1==166774 & st %in% c(37)  & is.na(stockarea) ~ "Unit",
+    .default = stockarea  )
+  )
+
            
 REC_DATA<-REC_DATA %>%
   mutate(stockarea = case_when(
@@ -326,7 +378,22 @@ REC_DATA<-REC_DATA %>%
 REC_DATA<-REC_DATA %>%
   mutate(missing=is.na(stockarea))
 
-table(REC_DATA$missing)
+# A species cannot be "UNIT" and something else.  
+test3<-REC_DATA %>%
+    mutate(check1 = case_when(
+    stockarea=="Unit"~  "Unit",
+  .default = "Other"  ) 
+    ) %>%
+  group_by(prim1_common,check1) %>%
+  summarise(count=n()) 
+
+problems<-test3 %>%
+  group_by(prim1_common) %>%
+  summarise(count=n()) %>%
+  filter(count>1)
+
+stopifnot(nrow(problems)==0)
+
 
 ```
 
@@ -334,6 +401,18 @@ table(REC_DATA$missing)
 ## Compute Recreational Effort
 
 ```{r compute_trips}
+
+
+
+# Create the directed trip indicator, convert the mode and Region variables to factors.    
+REC_DATA<-REC_DATA %>%  
+  mutate(dtrip=1,
+         mode_fc=factor(mode_fc,levels=c("3","4","7"),
+                        labels=c("Shore","Party_Charter","Private_Rental")),
+         Region=factor(sub_reg,levels=c("4","5","6"),
+                       labels=c("NE","MA", "NC")))
+
+
 
 # construct the object that describes the survey design.
 
@@ -361,7 +440,8 @@ Effortmeans$se <- ceiling(Effortmeans$se)
 if (params$finished_switch=="placeholder"){
   cost<-50
 } else if  (params$finished_switch=="finished") {
-  # This will require a join to the 2022 expenditure survey data. 
+  # This will require a join to the results 2022 expenditure survey data. 
+  # You may also need to look up previous survey results to fill in costs from previous years.
 }
 ```
 
@@ -369,11 +449,18 @@ if (params$finished_switch=="placeholder"){
 ## Format the commercial and recreational data.
     
 ```{r save}	
-    
+  
 Recreational_Expenditures<-Effortmeans %>%
   mutate(value=cost*dtrip) %>%
   group_by(year,tsn1,stockarea) %>%
   summarise(recreational_value=sum(value))
+
+Recreational_Expenditures<-Recreational_Expenditures %>%
+  rename(itis_tsn=tsn1) %>%
+  left_join(fmp_listing, by=join_by(itis_tsn==itis_tsn)) %>%
+  relocate(council, fmp, itis_tsn, itis_sci_name, itis_name, stockarea)%>%
+  arrange(council, fmp, itis_name,stockarea, year) %>%
+  select(-nespp3)
 
 saveRDS(Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{params$finished_switch}_{vintage_string}.Rds")))
 
