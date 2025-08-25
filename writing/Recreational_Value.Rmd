@@ -1,5 +1,5 @@
 ---
-title: "Commercial and Recreational Value"
+title: "Recreational Value"
 author: "Min-Yang Lee"
 date: "`r format(Sys.time(), '%B %d, %Y')`" 
 output:
@@ -42,7 +42,7 @@ conflicts_prefer(dplyr::arrange)
 options(scipen=999)
 options(survey.lonely.psu = "certainty")
 
-here::i_am("writing/Commercial_and_Recreational.Rmd")
+here::i_am("writing/Recreational_Value.Rmd")
 
 
 ```
@@ -51,13 +51,6 @@ here::i_am("writing/Commercial_and_Recreational.Rmd")
 
 #Some of the data prep takes a long time. 
 #Instead of pulling data every time I want to compile this doc, I have split off the code to do so into the following pieces.
-
-# Get GDP implicit price deflators
-source(here("R_code", "data_extraction_processing", "extraction","FRED_extraction.R"))
-
-
-# Get commercial data
-source(here("R_code", "data_extraction_processing", "extraction","fmp_value_datapull.R"))
 
 # Get MRIP sites
 source(here("R_code", "data_extraction_processing", "extraction","MRIP_sites.R"))
@@ -73,9 +66,13 @@ vintage_string<-gsub("species_area_landings_","",vintage_string)
 vintage_string<-gsub(".Rds","",vintage_string)
 vintage_string<-max(vintage_string)
 
-CAMS_revenue<-readRDS(file=here("data_folder", "main", glue("species_area_landings_{vintage_string}.Rds")))
 stock_area_definitions<-readRDS(file=here("data_folder", "main", glue("stock_area_definitions_{vintage_string}.Rds")))
+stock_area_definitions<-stock_area_definitions %>%
+  rename(stockarea=area_name2)
 fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage_string}.Rds")))
+
+# Read in Stock keyfile												  
+stock_keyfile<-readRDS(file=here("data_folder", "main", glue("stock_keyfile_{vintage_string}.Rds")))
 
 # load in the MRIP site list
 site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{vintage_string}.Rds")))
@@ -101,55 +98,14 @@ deflators<-deflators %>%
 
 # Introduction
 
-This document describes how we assemble Gross Revenues for Commercial and Gross expenditures for Recreational at the stock level.
+This document describes how we assemble Gross Expenditures for Recreational at the stock level.
 
-# Gross Revenues for Commercial
-
-Gross revenues aggregated to the species and statistical area were extracted from CAMS.  We aggregated to the stockarea using a modification of the ``cams_garfo.cfg_statarea_stock`` table.  This does not have all stock definitions in it, fortunately most of the missing ones are Unit stocks.  We used the ``STOCKEFF`` website to look up which species are unit stocks and which have areas.  For stocks not in ``STOCKEFF,`` we used the stock assessment and relevant fishery management documents.
-
-```{r dataclean_commercial}
-
-# Pull in stock area definitions.  Drop out landings from Canada or the 700s.
-
-
-CAMS_revenue<-CAMS_revenue %>%
-  left_join(stock_area_definitions, by=join_by(itis_tsn==itis_tsn, area==area))%>%
-  mutate(area=as.numeric(area))%>%
-  filter(area<639 & area>=464) %>%
-  filter(!area %in% c(466,467,511,552))%>%
-  mutate(missing=is.na(area_name2))
-# There is still a little slop, A bit of skates that do not match. 
-#table(CAMS_revenue$itis_name, CAMS_revenue$missing)
-
-# Some do not have a definition. Classify those as unit stocks
-CAMS_revenue<-CAMS_revenue %>%
-  mutate(area_name2=if_else(is.na(area_name2),"Unit",area_name2))%>%
-  select(-c(common_name, area_name))
-
-
-# Aggregate landings and value to the stock-year level.
-CAMS_revenue<-CAMS_revenue%>%
-  group_by(council, itis_name, itis_tsn, area_name2, itis_sci_name, fmp, year) %>%
-  summarise(commercial_value=sum(value),
-            commercial_landed_pounds=sum(landings)) %>%
-  ungroup() %>%
-  filter(year>=2021 & year<=2024)
-
-```
-
-## Which stocks
+## Which stocks do I have
 
 Print out a table of stocks by manager. This is just an easy way to make sure we have what we are expecting.
 
 
 ```{r keyfiles}
-stock_keyfile<-CAMS_revenue %>%
-  select(c(council, fmp, itis_name, area_name2)) %>%
-  group_by(council, fmp, itis_name, area_name2) %>% 
-    slice(1) %>%
-  ungroup() %>%
-  arrange(council,fmp, itis_name, area_name2)
-
 ASFMC<-stock_keyfile %>%
   filter(council == "ASMFC" | council=="ASMFC/NEFMC")
 
@@ -160,18 +116,23 @@ MAFMC<-stock_keyfile %>%
 NEFMC<-stock_keyfile %>%
   filter(council == "NEFMC" | council=="MAFMC/NEFMC"  | council=="ASMFC/NEFMC")
 
+Non_Managed<-stock_keyfile %>%
+  filter(is.na(council))
+
+out_of_geog<-fmp_listing %>%
+  filter(fmp  %in% c("SERO FMP","Highly Migratory Species"))
 ```
 
 ### ASMFC stocks
 
 ```{r ASFMC_stocks}
- knitr::kable(ASFMC %>% select(-council), caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(ASFMC %>% select(-c(council, itis_tsn)), caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
 
 ```
 ### MAFMC stocks
 
 ```{r MAFMC_stocks}
- knitr::kable(MAFMC  %>% select(-council), caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(MAFMC  %>% select(-c(council, itis_tsn)), caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
 
 ```
 
@@ -180,10 +141,27 @@ NEFMC<-stock_keyfile %>%
 
 ```{r NEFMC_stocks}
 
- knitr::kable(NEFMC  %>% select(-council), caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(NEFMC  %>% select(-c(council, itis_tsn)), caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
 
 ```
 
+### HMS and SERO 
+HMS, and SERO. 
+
+
+```{r HMS_SERO}
+ knitr::kable(out_of_geog  %>% select(c(fmp, itis_name)), caption='HMS and SERO stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+### Non-Managed
+
+These are a mixed of state managed stocks
+
+
+```{r Non-Managed}
+ knitr::kable(Non_Managed  %>% select(-c(council, itis_tsn)), caption='Non-Northest Region stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
 
 
 # Expenditures for Recreational
@@ -197,6 +175,15 @@ Recreational expenditures are computed based on trips and the first target speci
 site_list<-site_list %>%
     rename_with(tolower)%>%
   select(intsite,nmfs_stat_area, state_code, county_code)
+
+
+county_list<-site_list %>%
+  group_by(state_code, county_code) %>%
+  count(nmfs_stat_area)%>%
+  arrange(state_code, county_code, n) %>%
+  select(state_code,county_code,nmfs_stat_area) %>%
+  rename(nmfs_stat_areaC=nmfs_stat_area)
+
 ```
 
 ```{r read_and_prepTripdata}
@@ -205,6 +192,15 @@ site_list<-site_list %>%
 # Subset to the trips that target our species.
 # Assign statistical areas
 # Use statistical areas to assign to stock areas
+
+# 2004 or later
+Tripdata  <- Tripdata %>% 
+  filter(year>=2004)
+
+# Northeast, Mid-Atlantic, or North Carolina
+Tripdata <- Tripdata %>% 
+  filter(sub_reg %in% c(4,5) | st==37) 
+
 
 
 # fix the var_id
@@ -237,51 +233,97 @@ Tripdata <- Tripdata %>%
 Tripdata  <- Tripdata %>% 
   arrange(strat_id, psu_id, id_code) 
 
+
+
+
 ##############################################################
 # Keep rows that are among the species that we are interested in.  
 
 # make a vector of the itis names
 tsns<-fmp_listing %>%
-  pull(itis_tsn)
+  select(itis_tsn,fmp,council) %>%
+  mutate(in_fmp_keyfile=1)
 
-# Filter on tsn1 in our 'list of species'.
+# Inner join to the keyfile to keep just the trips that are in the fmp listing 
 Tripdata  <- Tripdata %>% 
-  filter(tsn1 %in% tsns)
+  inner_join(tsns, by=join_by(tsn1==itis_tsn))
 
+```
+
+
+
+
+```{r join_to_statistical}
 
 # assign to statistical areas
 # state, county, and intsite are needed to uniquely join.
 Tripdata  <- Tripdata %>% 
   left_join(site_list, by=join_by(st==state_code, cnty==county_code,intsite==intsite))
 
-# Filter for just NC to ME
-# Keep the years we want
+# use the most prevalent stat area by county in case there are missing intsites
+Tripdata  <- Tripdata %>% 
+  left_join(county_list, by=join_by(st==state_code, cnty==county_code))
 
-REC_DATA <- Tripdata %>% 
-  filter(sub_reg %in% c(4,5) | st==37) %>%
-  filter(year >=2021 & year<=2024) 
+# merge update
+Tripdata<-Tripdata %>%
+  mutate(nmfs_stat_area=if_else(is.na(nmfs_stat_area), nmfs_stat_areaC,nmfs_stat_area)) %>%
+  select(-nmfs_stat_areaC)
+```
 
-# Create the directed trip indicator, convert the mode and Region variables to factors.    
-REC_DATA<-REC_DATA %>%  
-  mutate(dtrip=1,
-         mode_fc=factor(mode_fc,levels=c("3","4","7"),
-                        labels=c("Shore","Party_Charter","Private_Rental")),
-         Region=factor(sub_reg,levels=c("4","5","6"),
-                       labels=c("NE","MA", "NC")))
+
+
+```{r join_to_stock_definitions}
 
 # Add in the stock area definitions, which area at the itis_tsn and statistical area.
-REC_DATA<-REC_DATA %>%
+REC_DATA<-Tripdata %>%
   left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area))
+
+
+# Just mark anything that is not in our area as "Unit"
+# test2<-REC_DATA %>%
+#   filter(fmp %in% "No Federal FMP")
+# 
+# table(test2$prim1_common)
+
+
+# Fill in missing stockareas for things that are not NER managed with "Unit"
+REC_DATA<-REC_DATA %>%
+   mutate(stockarea = case_when(
+          fmp %in% "No Federal FMP" & is.na(stockarea)~ "Unit",
+          .default=stockarea)
+ )
+
+
+# test3<-REC_DATA %>%
+#    filter(is.na(stockarea)) %>%
+#   group_by(prim1_common) %>%
+#   slice(1) %>%
+#   pull(prim1_common)
+# test3<-REC_DATA %>%
+#    filter(is.na(stockarea) & prim1_common=="WINDOWPANE") %>%
+#   group_by(prim1_common) 
+# 
+# 
+# saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
 
 ```
 
-The stock areas from CAMS are a bit messy, it doesn't actually include everything. 
+```{r placeholder_handle}
+#REC_DATA<-readRDS(file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
+if (params$finished_switch == "placeholder") {
+  REC_DATA<-REC_DATA %>%
+    filter(year>=2006)
+}
+```
+
 
 ```{r data_clean_stockarea}
+
+
 REC_DATA<-REC_DATA %>%
-  mutate(missing=is.na(area_name2))
-# look at the missing area_name2
-table(REC_DATA$missing, REC_DATA$prim1_common)
+  mutate(missing=is.na(stockarea))
+# look at the missing stockarea
+table(REC_DATA$prim1_common,REC_DATA$missing)
 #It's not too bad, the only one that has any missing==FALSE and 2 stock areas is Black Sea Bass.
 # We can deal with it based on state.
 # 
@@ -292,32 +334,66 @@ table(REC_DATA$missing, REC_DATA$prim1_common)
 
 #Black sea bass
 REC_DATA<-REC_DATA %>%
-  mutate(area_name2 = case_when(
-    tsn1==167687 & st %in% c(9,25,33,44) & is.na(area_name2)~ "NORTH",
-    tsn1==167687 & st %in% c(10,24,36,37, 51)  & is.na(area_name2) ~ "SOUTH",
-    tsn1==167687 & st ==34 & cnty %in% c(3,13,17,23,39)  & is.na(area_name2) ~ "NORTH",
-    tsn1==167687 & st ==34 & cnty %in% c(1,5,9,11,29)  & is.na(area_name2)~ "SOUTH",
-    .default = area_name2  )
+  mutate(stockarea = case_when(
+    tsn1==167687 & st %in% c(9,25,33,44) & is.na(stockarea)~ "NORTH",
+    tsn1==167687 & st %in% c(10,24,36,37, 51)  & is.na(stockarea) ~ "SOUTH",
+    tsn1==167687 & st ==34 & cnty %in% c(3,13,17,23,39)  & is.na(stockarea) ~ "NORTH",
+    tsn1==167687 & st ==34 & cnty %in% c(1,5,9,11,29)  & is.na(stockarea)~ "SOUTH",
+    tsn1==172746 & st ==37 & is.na(stockarea)~ "SNEMA",
+
+    .default = stockarea  )
+  )
+
+# Lone Windowpane
+REC_DATA<-REC_DATA %>%
+  mutate(stockarea = case_when(
+    tsn1==172746 & st ==37 & is.na(stockarea)~ "SNEMA",
+    .default = stockarea  )
   )
 
 
 #Lone red hake
 REC_DATA<-REC_DATA %>%
-  mutate(area_name2 = case_when(
-    tsn1==164730 & st %in% c(10,24,36,37, 51)  & is.na(area_name2) ~ "SOUTHERN",
-    .default = area_name2  )
+  mutate(stockarea = case_when(
+    tsn1==164730 & st %in% c(10,24,36,37, 51)  & is.na(stockarea) ~ "SOUTHERN",
+    .default = stockarea  )
   )
+
+
+
+# Random Acadian Redfish, which is probably Red Drum 
+REC_DATA<-REC_DATA %>%
+  mutate(stockarea = case_when(
+    tsn1==166774 & st %in% c(37)  & is.na(stockarea) ~ "Unit",
+    .default = stockarea  )
+  )
+
            
 REC_DATA<-REC_DATA %>%
-  mutate(area_name2 = case_when(
-    is.na(area_name2)~ "Unit",
-  .default = area_name2  )
+  mutate(stockarea = case_when(
+    is.na(stockarea)~ "Unit",
+  .default = stockarea  )
 )
 
 REC_DATA<-REC_DATA %>%
-  mutate(missing=is.na(area_name2))
+  mutate(missing=is.na(stockarea))
 
-table(REC_DATA$missing)
+# A species cannot be "UNIT" and something else.  
+test3<-REC_DATA %>%
+    mutate(check1 = case_when(
+    stockarea=="Unit"~  "Unit",
+  .default = "Other"  ) 
+    ) %>%
+  group_by(prim1_common,check1) %>%
+  summarise(count=n()) 
+
+problems<-test3 %>%
+  group_by(prim1_common) %>%
+  summarise(count=n()) %>%
+  filter(count>1)
+
+stopifnot(nrow(problems)==0)
+
 
 ```
 
@@ -325,6 +401,18 @@ table(REC_DATA$missing)
 ## Compute Recreational Effort
 
 ```{r compute_trips}
+
+
+
+# Create the directed trip indicator, convert the mode and Region variables to factors.    
+REC_DATA<-REC_DATA %>%  
+  mutate(dtrip=1,
+         mode_fc=factor(mode_fc,levels=c("3","4","7"),
+                        labels=c("Shore","Party_Charter","Private_Rental")),
+         Region=factor(sub_reg,levels=c("4","5","6"),
+                       labels=c("NE","MA", "NC")))
+
+
 
 # construct the object that describes the survey design.
 
@@ -337,7 +425,7 @@ Effortdesign <- svydesign(
 )
 
 # Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
-Effortmeans <- svyby(~dtrip, by=~year+tsn1+mode_fc+area_name2,
+Effortmeans <- svyby(~dtrip, by=~year+tsn1+mode_fc+stockarea,
                      svytotal,
                      design=Effortdesign)
 
@@ -352,33 +440,32 @@ Effortmeans$se <- ceiling(Effortmeans$se)
 if (params$finished_switch=="placeholder"){
   cost<-50
 } else if  (params$finished_switch=="finished") {
-  # This will require a join to the 2022 expenditure survey data. 
+  # This will require a join to the results 2022 expenditure survey data. 
+  # You may also need to look up previous survey results to fill in costs from previous years.
 }
+```
+
+
+## Format the commercial and recreational data.
     
-    
-Effort_totals<-Effortmeans %>%
+```{r save}	
+  
+Recreational_Expenditures<-Effortmeans %>%
   mutate(value=cost*dtrip) %>%
-  group_by(year,tsn1,area_name2) %>%
+  group_by(year,tsn1,stockarea) %>%
   summarise(recreational_value=sum(value))
 
-```
+Recreational_Expenditures<-Recreational_Expenditures %>%
+  rename(itis_tsn=tsn1) %>%
+  left_join(fmp_listing, by=join_by(itis_tsn==itis_tsn)) %>%
+  relocate(council, fmp, itis_tsn, itis_sci_name, itis_name, stockarea)%>%
+  arrange(council, fmp, itis_name,stockarea, year) %>%
+  select(-nespp3)
 
-
-##  Join
-
-Join the commercial to the recreational data and save
-
-```{r merge_to_commercial}
-
-All_Expenditures<-CAMS_revenue  %>%
-  left_join(Effort_totals, by=join_by(year==year, itis_tsn==tsn1, area_name2==area_name2)) %>%
-  mutate(recreational_value=if_else(is.na(recreational_value),0,recreational_value))
-
-saveRDS(All_Expenditures, file=here("data_folder","main",glue("All_expenditures_{params$finished_switch}_{vintage_string}.Rds")))
+saveRDS(Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{params$finished_switch}_{vintage_string}.Rds")))
 
 
 ```
-
 
 
 

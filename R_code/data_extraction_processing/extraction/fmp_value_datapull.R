@@ -8,7 +8,7 @@ here::i_am("R_code/data_extraction_processing/extraction/fmp_value_datapull.R")
 
 vintage_string<-format(Sys.Date())
 
-year_start<-2021
+year_start<-2004
 year_end<-2024
 
 ################################################################################
@@ -25,15 +25,31 @@ nova_conn<-dbConnect(drv, id, password=novapw, dbname=nefscusers.connect.string)
 fmp_query<-glue("select itis_tsn, itis_sci_name, itis_name, dlr_nespp3 as nespp3, fmp, council from cams_garfo.cfg_itis 
                 where council is not NULL")
 
+other_managed_query<-glue("select itis_tsn, itis_sci_name, itis_name, dlr_nespp3 as nespp3, fmp, council from cams_garfo.cfg_itis 
+                where council is NULL")
+
+
 # Query to pull landings, aggregated by the itis, stat area,  year. Just for "managed species" 
 
 landings_query<-glue("select cl.area, cl.year, cl.itis_tsn, sum(nvl(cl.lndlb,0)) as landings, sum(nvl(cl.value,0)) as value from cams_garfo.cams_land cl 
     left join cams_garfo.cfg_itis sp
         on cl.itis_tsn=sp.itis_tsn 
-    where sp.council is not null and cl.year between {year_start} and {year_end}
+    where sp.council is not null and cl.state in ('ME','NH','VT','MA','RI','CT','NY','PA','NJ', 'DE','MD','VA','DC','NC')
+    and cl.year between {year_start} and {year_end}
   group by cl.year, cl.itis_tsn,  cl.area")
 
-# Query to pull statistcial areas
+
+# Query to pull landings, aggregated by the itis, stat area,  year. Just for "non-managed species" (Council=NULL)
+
+landings_non_NEM_query<-glue("select cl.year, cl.itis_tsn, sum(nvl(cl.lndlb,0)) as landings, sum(nvl(cl.value,0)) as value from cams_garfo.cams_land cl 
+    left join cams_garfo.cfg_itis sp
+        on cl.itis_tsn=sp.itis_tsn 
+    where sp.council is null and cl.state in ('ME','NH','VT','MA','RI','CT','NY','PA','NJ', 'DE','MD','VA','DC','NC' )
+    and cl.year between {year_start} and {year_end}
+  group by cl.year, cl.itis_tsn")
+
+
+# Query to pull statistical areas
 
 area_query<-glue("select common_name,itis_tsn,area,area_name from cams_garfo.cfg_statarea_stock st where itis_tsn in (
     select itis_tsn from cams_garfo.cfg_itis 
@@ -44,7 +60,9 @@ fmp_listing<-dbGetQuery(nova_conn, fmp_query)
 stock_area_definitions<-dbGetQuery(nova_conn, area_query)
 
 species_area_landings<-dbGetQuery(nova_conn, landings_query)
+non_NEM_landings<-dbGetQuery(nova_conn, landings_non_NEM_query)
 
+other_species_listing<-dbGetQuery(nova_conn, other_managed_query)
 
 dbDisconnect(nova_conn)
 ################################################################################
@@ -68,6 +86,16 @@ fmp_listing <- fmp_listing %>%
   arrange(council, fmp, itis_name)
 
 
+
+other_species_listing <-other_species_listing %>%
+  mutate(COUNCIL = ifelse(COUNCIL == "NEFMC/MAFMC", "MAFMC/NEFMC", COUNCIL))
+other_species_listing <- other_species_listing %>%
+  rename_with(tolower)%>%
+  arrange(council, fmp, itis_name)
+
+fmp_listing<-rbind(fmp_listing, other_species_listing)
+
+
 write_rds(fmp_listing, file=here("data_folder","main",glue("fmp_listing_{vintage_string}.Rds")))
 #write_csv(fmp_listing, file=here("data_folder","main",glue("fmp_listing_{vintage_string}.csv")))
 
@@ -89,6 +117,36 @@ species_area_landings<-species_area_landings %>%
 
 write_rds(species_area_landings, file=here("data_folder","main",glue("species_area_landings_{vintage_string}.Rds")))
 ##############################################################################
+
+
+
+
+
+################################################################################
+# deal with non_NEM_landings data
+################################################################################
+
+
+
+
+# rename to lower
+non_NEM_landings <- non_NEM_landings %>%
+  rename_with(tolower)
+
+# join to fmp_listing to get council info
+non_NEM_landings<-non_NEM_landings %>%
+  left_join(other_species_listing, by=join_by(itis_tsn==itis_tsn)) %>%
+  relocate(council, fmp, itis_name, itis_sci_name, itis_tsn, nespp3, year, landings, value)%>%
+  arrange(council, fmp, itis_name, year)
+
+non_NEM_landings<-non_NEM_landings %>%
+  filter(value>0) %>%
+  filter(is.na(itis_name)==0)
+
+write_rds(non_NEM_landings, file=here("data_folder","main",glue("Other_species_landings_{vintage_string}.Rds")))
+##############################################################################
+
+
 
 
 

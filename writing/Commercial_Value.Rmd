@@ -1,0 +1,239 @@
+---
+title: "Commercial Value"
+author: "Min-Yang Lee"
+date: "`r format(Sys.time(), '%B %d, %Y')`" 
+output:
+  html_document:
+    df_print: paged
+    keep_md: yes
+    fig_caption: yes
+params:
+  finished_switch:
+    value: placeholder
+    choices:
+    - placeholder
+    - finished
+  deflate_year:
+    value: 2024
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(comment = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+library(here)
+library(tidyverse)
+library(data.table)
+library(reshape2)
+library(ggpubr)
+library(kableExtra)
+library(glue)
+library(survey)
+library(fredr)
+library(conflicted)
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(lubridate::year)
+conflicts_prefer(dplyr::summarise)
+conflicts_prefer(dplyr::arrange)
+options(scipen=999)
+options(survey.lonely.psu = "certainty")
+
+here::i_am("writing/Commercial_Value.Rmd")
+
+
+```
+
+```{r extract_data, eval=FALSE, include=FALSE}
+
+#Some of the data prep takes a long time. 
+#Instead of pulling data every time I want to compile this doc, I have split off the code to do so into the following pieces.
+
+# Get GDP implicit price deflators
+source(here("R_code", "data_extraction_processing", "extraction","FRED_extraction.R"))
+# Get commercial data
+source(here("R_code", "data_extraction_processing", "extraction","fmp_value_datapull.R"))
+
+```
+
+```{r readin_data, include=FALSE}
+vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("species_area_landings_*Rds"))
+vintage_string<-gsub("species_area_landings_","",vintage_string)
+vintage_string<-gsub(".Rds","",vintage_string)
+vintage_string<-max(vintage_string)
+
+CAMS_revenue<-readRDS(file=here("data_folder", "main", glue("species_area_landings_{vintage_string}.Rds")))
+stock_area_definitions<-readRDS(file=here("data_folder", "main", glue("stock_area_definitions_{vintage_string}.Rds")))
+stock_area_definitions<-stock_area_definitions %>%
+  rename(stockarea=area_name2)
+fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage_string}.Rds")))
+
+#landings and value for non northeast managed species.
+non_NEM_landings<-readRDS(file=here("data_folder","main",glue("Other_species_landings_{vintage_string}.Rds")))
+
+
+
+# Read in Deflators
+deflators<-readRDS(file=here("data_folder","raw",glue("deflators_{vintage_string}.Rds")))
+```
+
+```{r process_deflators, include=FALSE}
+
+deflate_base<-deflators %>%
+  filter(year==params$deflate_year)%>%
+  pull(value)
+
+# multiply a NOMINAL value by the deflation multiplier to get REAL 'base-year' dollars
+deflators<-deflators %>%
+  mutate(deflation_multiplier  = deflate_base/value) %>%
+  select(year,series_id,deflation_multiplier)
+
+```
+
+# Introduction
+
+This document describes how we assemble Gross Revenues for Commercial.
+
+# Gross Revenues for Commercial
+
+Gross revenues aggregated to the species and statistical area were extracted from CAMS.  We aggregated to the stockarea using a modification of the ``cams_garfo.cfg_statarea_stock`` table.  This does not have all stock definitions in it, fortunately most of the missing ones are Unit stocks.  We used the ``STOCKEFF`` website to look up which species are unit stocks and which have areas.  For stocks not in ``STOCKEFF,`` we used the stock assessment and relevant fishery management documents.
+
+```{r dataclean_commercial}
+
+# Pull in stock area definitions.  Drop out landings from Canada or the 700s.
+
+
+CAMS_revenue<-CAMS_revenue %>%
+  left_join(stock_area_definitions, by=join_by(itis_tsn==itis_tsn, area==area))%>%
+  mutate(area=as.numeric(area))%>%
+  filter(area %in% c(465,464,
+                     511,512,513,515,515,521,522,525,526,
+                     533,534,537,538,539,541,542,543,561,562,
+                     611,612,613,614,615,616,621,622,623,624,
+                     625,626,627,628,629,
+                     631,632,633,634,
+                     635,636,637,638,639)) %>%
+  mutate(missing=is.na(stockarea))
+# There is still a little slop, A bit of skates that do not match. 
+#table(CAMS_revenue$itis_name, CAMS_revenue$missing)
+
+# Some do not have a definition. Classify those as unit stocks
+CAMS_revenue<-CAMS_revenue %>%
+  mutate(stockarea=if_else(is.na(stockarea),"UNIT",stockarea))%>%
+  mutate(stockarea=if_else(stockarea=="Unit","UNIT",stockarea)) %>%
+  select(-c(common_name, area_name))
+
+#make sure stockarea is all filled in.
+missing_check <-CAMS_revenue %>%
+  filter(is.na(stockarea))
+stopifnot(nrow(missing_check)==0)
+
+# Aggregate landings and value to the stock-year level.
+CAMS_revenue<-CAMS_revenue%>%
+  group_by(council, itis_name, itis_tsn, stockarea, itis_sci_name, fmp, year) %>%
+  summarise(commercial_value=sum(value),
+            commercial_landed_pounds=sum(landings)) %>%
+  ungroup()
+
+
+non_NEM_landings<-non_NEM_landings %>%
+  select(council, itis_name, itis_tsn, itis_sci_name, fmp, year, value, landings) %>%
+    group_by(council, itis_name, itis_tsn, itis_sci_name, fmp, year) %>%
+  summarise(commercial_value=sum(value),
+            commercial_landed_pounds=sum(landings)) %>%
+  ungroup() %>%
+  mutate(stockarea="UNIT")
+
+CAMS_revenue<-rbind(CAMS_revenue,non_NEM_landings)
+CAMS_revenue<-CAMS_revenue %>%
+  arrange(council, itis_name, itis_tsn, itis_sci_name, fmp, year)
+
+
+```
+
+## Which stocks do I have
+
+Print out a table of stocks by manager. This is just an easy way to make sure we have what we are expecting.  The stocks info was extracted from CAMS, so it uses the current stock boundaries. 
+
+
+```{r keyfiles}
+stock_keyfile<-CAMS_revenue %>%
+  select(c(council, fmp, itis_tsn, itis_name, itis_sci_name, stockarea)) %>%
+  group_by(council, fmp, itis_tsn, itis_name, itis_sci_name, stockarea) %>% 
+    slice(1) %>%
+  ungroup() %>%
+  arrange(council, fmp, itis_tsn, itis_name, itis_sci_name, stockarea)
+
+saveRDS(stock_keyfile, file=here("data_folder","main",glue("stock_keyfile_{vintage_string}.Rds")))
+
+
+
+ASFMC<-stock_keyfile %>%
+  filter(council == "ASMFC" | council=="ASMFC/NEFMC")
+
+
+MAFMC<-stock_keyfile %>%
+  filter(council == "MAFMC" | council=="MAFMC/NEFMC")
+
+NEFMC<-stock_keyfile %>%
+  filter(council == "NEFMC" | council=="MAFMC/NEFMC"  | council=="ASMFC/NEFMC")
+
+Non_Managed<-stock_keyfile %>%
+  filter(is.na(council))
+
+out_of_geog<-fmp_listing %>%
+  filter(fmp  %in% c("SERO FMP","Highly Migratory Species"))
+```
+
+### ASMFC stocks
+
+```{r ASFMC_stocks}
+ knitr::kable(ASFMC %>% select(-c(council, itis_tsn)), caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","r") ) 
+
+```
+### MAFMC stocks
+
+```{r MAFMC_stocks}
+ knitr::kable(MAFMC  %>% select(-c(council, itis_tsn)), caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","r") ) 
+
+```
+
+### NEFMC stocks
+
+
+```{r NEFMC_stocks}
+
+ knitr::kable(NEFMC  %>% select(-c(council, itis_tsn)), caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","r") ) 
+
+```
+
+
+### Non-Northeast
+
+These are a mixed of state managed stocks, HMS, and SERO managed stocks.
+
+
+```{r Non-Managed}
+ knitr::kable(Non_Managed  %>% select(-c(council, itis_tsn,stockarea)), caption='Non-Northest Region stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","r") ) 
+
+```
+
+## Format the commercial data.
+
+```{r format_and_export}
+Commercial_Value<-CAMS_revenue %>%
+  select(-commercial_landed_pounds) %>%
+  pivot_wider(names_from=year, values_from=commercial_value) %>%
+  relocate(council, fmp, itis_tsn, itis_sci_name, itis_name, stockarea)
+
+saveRDS(Commercial_Value, file=here("data_folder","main",glue("Commercial_Value_{params$finished_switch}_{vintage_string}.Rds")))
+
+
+```
+
+
+
+
