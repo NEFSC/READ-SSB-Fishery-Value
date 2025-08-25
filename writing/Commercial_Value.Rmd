@@ -118,7 +118,7 @@ CAMS_revenue<-CAMS_revenue %>%
                      635,636,637,638,639)) %>%
   mutate(missing=is.na(stockarea))
 # There is still a little slop, A bit of skates that do not match. 
-table(CAMS_revenue$itis_name, CAMS_revenue$missing)
+#table(CAMS_revenue$itis_name, CAMS_revenue$missing)
 
 # Some do not have a definition. Classify those as unit stocks
 CAMS_revenue<-CAMS_revenue %>%
@@ -156,16 +156,16 @@ CAMS_revenue<-CAMS_revenue %>%
 
 ## Which stocks do I have
 
-Print out a table of stocks by manager. This is just an easy way to make sure we have what we are expecting.
+Print out a table of stocks by manager. This is just an easy way to make sure we have what we are expecting.  The stocks info was extracted from CAMS, so it uses the current stock boundaries. 
 
 
 ```{r keyfiles}
 stock_keyfile<-CAMS_revenue %>%
-  select(c(council, fmp, itis_name, itis_tsn, stockarea)) %>%
-  group_by(council, fmp, itis_name, itis_tsn, stockarea) %>% 
+  select(c(council, fmp, itis_tsn, itis_name, itis_sci_name, stockarea)) %>%
+  group_by(council, fmp, itis_tsn, itis_name, itis_sci_name, stockarea) %>% 
     slice(1) %>%
   ungroup() %>%
-  arrange(council,fmp, itis_name, stockarea)
+  arrange(council, fmp, itis_tsn, itis_name, itis_sci_name, stockarea)
 
 saveRDS(stock_keyfile, file=here("data_folder","main",glue("stock_keyfile_{vintage_string}.Rds")))
 
@@ -191,13 +191,13 @@ out_of_geog<-fmp_listing %>%
 ### ASMFC stocks
 
 ```{r ASFMC_stocks}
- knitr::kable(ASFMC %>% select(-c(council, itis_tsn)), caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(ASFMC %>% select(-c(council, itis_tsn)), caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","r") ) 
 
 ```
 ### MAFMC stocks
 
 ```{r MAFMC_stocks}
- knitr::kable(MAFMC  %>% select(-c(council, itis_tsn)), caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(MAFMC  %>% select(-c(council, itis_tsn)), caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","r") ) 
 
 ```
 
@@ -206,25 +206,18 @@ out_of_geog<-fmp_listing %>%
 
 ```{r NEFMC_stocks}
 
- knitr::kable(NEFMC  %>% select(-c(council, itis_tsn)), caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(NEFMC  %>% select(-c(council, itis_tsn)), caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","r") ) 
 
 ```
 
-### HMS and SERO 
-HMS, and SERO. 
 
+### Non-Northeast
 
-```{r HMS_SERO}
- knitr::kable(out_of_geog  %>% select(c(fmp, itis_name)), caption='HMS and SERO stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
-
-```
-### Non-Managed
-
-These are a mixed of state managed stocks
+These are a mixed of state managed stocks, HMS, and SERO managed stocks.
 
 
 ```{r Non-Managed}
- knitr::kable(Non_Managed  %>% select(-c(council, itis_tsn)), caption='Non-Northest Region stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(Non_Managed  %>% select(-c(council, itis_tsn,stockarea)), caption='Non-Northest Region stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","r") ) 
 
 ```
 
