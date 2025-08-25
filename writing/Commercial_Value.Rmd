@@ -1,5 +1,5 @@
 ---
-title: "Commercial and Recreational Value"
+title: "Commercial Value"
 author: "Min-Yang Lee"
 date: "`r format(Sys.time(), '%B %d, %Y')`" 
 output:
@@ -54,8 +54,6 @@ here::i_am("writing/Commercial_Value.Rmd")
 
 # Get GDP implicit price deflators
 source(here("R_code", "data_extraction_processing", "extraction","FRED_extraction.R"))
-
-
 # Get commercial data
 source(here("R_code", "data_extraction_processing", "extraction","fmp_value_datapull.R"))
 

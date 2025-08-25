@@ -1,5 +1,5 @@
 ---
-title: "Commercial and Recreational Value"
+title: "Recreational Value"
 author: "Min-Yang Lee"
 date: "`r format(Sys.time(), '%B %d, %Y')`" 
 output:
@@ -73,8 +73,6 @@ fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage
 
 # Read in Stock keyfile												  
 stock_keyfile<-readRDS(file=here("data_folder", "main", glue("stock_keyfile_{vintage_string}.Rds")))
-
-			
 
 # load in the MRIP site list
 site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{vintage_string}.Rds")))
