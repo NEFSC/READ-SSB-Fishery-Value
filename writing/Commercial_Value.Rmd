@@ -172,20 +172,25 @@ saveRDS(stock_keyfile, file=here("data_folder","main",glue("stock_keyfile_{vinta
 
 
 ASFMC<-stock_keyfile %>%
-  filter(council == "ASMFC" | council=="ASMFC/NEFMC")
+  filter(council == "ASMFC" | council=="ASMFC/NEFMC") %>% 
+  arrange(fmp, itis_name)
 
 
 MAFMC<-stock_keyfile %>%
-  filter(council == "MAFMC" | council=="MAFMC/NEFMC")
+  filter(council == "MAFMC" | council=="MAFMC/NEFMC")  %>% 
+  arrange(fmp, itis_name)
 
 NEFMC<-stock_keyfile %>%
-  filter(council == "NEFMC" | council=="MAFMC/NEFMC"  | council=="ASMFC/NEFMC")
+  filter(council == "NEFMC" | council=="MAFMC/NEFMC"  | council=="ASMFC/NEFMC") %>% 
+  arrange(fmp, itis_name)
 
 Non_Managed<-stock_keyfile %>%
-  filter(is.na(council))
+  filter(is.na(council)) %>% 
+  arrange(fmp, itis_name)
 
 out_of_geog<-fmp_listing %>%
-  filter(fmp  %in% c("SERO FMP","Highly Migratory Species"))
+  filter(fmp  %in% c("SERO FMP","Highly Migratory Species"))  %>% 
+  arrange(fmp, itis_name)
 ```
 
 ### ASMFC stocks
