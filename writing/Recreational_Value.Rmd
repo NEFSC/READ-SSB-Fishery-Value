@@ -1,0 +1,386 @@
+---
+title: "Commercial and Recreational Value"
+author: "Min-Yang Lee"
+date: "`r format(Sys.time(), '%B %d, %Y')`" 
+output:
+  html_document:
+    df_print: paged
+    keep_md: yes
+    fig_caption: yes
+params:
+  finished_switch:
+    value: placeholder
+    choices:
+    - placeholder
+    - finished
+  deflate_year:
+    value: 2024
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(comment = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+library(here)
+library(tidyverse)
+library(data.table)
+library(reshape2)
+library(ggpubr)
+library(kableExtra)
+library(glue)
+library(survey)
+library(fredr)
+library(conflicted)
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(lubridate::year)
+conflicts_prefer(dplyr::summarise)
+conflicts_prefer(dplyr::arrange)
+options(scipen=999)
+options(survey.lonely.psu = "certainty")
+
+here::i_am("writing/Recreational_Value.Rmd")
+
+
+```
+
+```{r extract_data, eval=FALSE, include=FALSE}
+
+#Some of the data prep takes a long time. 
+#Instead of pulling data every time I want to compile this doc, I have split off the code to do so into the following pieces.
+
+# Get MRIP sites
+source(here("R_code", "data_extraction_processing", "extraction","MRIP_sites.R"))
+
+     
+# Get MRIP catch and effort data
+source(here("R_code", "data_extraction_processing", "extraction","MRIP_Data_Extraction.R"))
+```
+
+```{r readin_data, include=FALSE}
+vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("species_area_landings_*Rds"))
+vintage_string<-gsub("species_area_landings_","",vintage_string)
+vintage_string<-gsub(".Rds","",vintage_string)
+vintage_string<-max(vintage_string)
+
+stock_area_definitions<-readRDS(file=here("data_folder", "main", glue("stock_area_definitions_{vintage_string}.Rds")))
+stock_area_definitions<-stock_area_definitions %>%
+  rename(stockarea=area_name2)
+fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage_string}.Rds")))
+
+# Read in Stock keyfile												  
+stock_keyfile<-readRDS(file=here("data_folder", "main", glue("stock_keyfile_{vintage_string}.Rds")))
+
+			
+
+# load in the MRIP site list
+site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{vintage_string}.Rds")))
+# Read in trip data
+Tripdata<-readRDS(file=here("data_folder","raw",glue("rectrip_{vintage_string}.Rds")))
+
+# Read in Deflators
+deflators<-readRDS(file=here("data_folder","raw",glue("deflators_{vintage_string}.Rds")))
+```
+
+```{r process_deflators, include=FALSE}
+
+deflate_base<-deflators %>%
+  filter(year==params$deflate_year)%>%
+  pull(value)
+
+# multiply a NOMINAL value by the deflation multiplier to get REAL 'base-year' dollars
+deflators<-deflators %>%
+  mutate(deflation_multiplier  = deflate_base/value) %>%
+  select(year,series_id,deflation_multiplier)
+
+```
+
+# Introduction
+
+This document describes how we assemble Gross Expenditures for Recreational at the stock level.
+
+## Which stocks do I have
+
+Print out a table of stocks by manager. This is just an easy way to make sure we have what we are expecting.
+
+
+```{r keyfiles}
+ASFMC<-stock_keyfile %>%
+  filter(council == "ASMFC" | council=="ASMFC/NEFMC")
+
+
+MAFMC<-stock_keyfile %>%
+  filter(council == "MAFMC" | council=="MAFMC/NEFMC")
+
+NEFMC<-stock_keyfile %>%
+  filter(council == "NEFMC" | council=="MAFMC/NEFMC"  | council=="ASMFC/NEFMC")
+
+Non_Managed<-stock_keyfile %>%
+  filter(is.na(council))
+
+out_of_geog<-fmp_listing %>%
+  filter(fmp  %in% c("SERO FMP","Highly Migratory Species"))
+```
+
+### ASMFC stocks
+
+```{r ASFMC_stocks}
+ knitr::kable(ASFMC %>% select(-c(council, itis_tsn)), caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+### MAFMC stocks
+
+```{r MAFMC_stocks}
+ knitr::kable(MAFMC  %>% select(-c(council, itis_tsn)), caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+
+### NEFMC stocks
+
+
+```{r NEFMC_stocks}
+
+ knitr::kable(NEFMC  %>% select(-c(council, itis_tsn)), caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+
+### HMS and SERO 
+HMS, and SERO. 
+
+
+```{r HMS_SERO}
+ knitr::kable(out_of_geog  %>% select(c(fmp, itis_name)), caption='HMS and SERO stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+### Non-Managed
+
+These are a mixed of state managed stocks
+
+
+```{r Non-Managed}
+ knitr::kable(Non_Managed  %>% select(-c(council, itis_tsn)), caption='Non-Northest Region stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+
+```
+
+
+# Expenditures for Recreational
+
+Recreational expenditures are computed based on trips and the first target species.  We use the ``RECDBS.MRIP_COD_ALL_SITE_LIST`` table to assign each state-county-intsite to a statistical area. We allocate recreational effort to the stock in the same way we allocate commercial effort (a modified version of ``cams_garfo.cfg_statarea_stock``).
+
+
+```{r Prepare_sites}
+
+# lower case the columns and keep just the ones I need 
+site_list<-site_list %>%
+    rename_with(tolower)%>%
+  select(intsite,nmfs_stat_area, state_code, county_code)
+```
+
+```{r read_and_prepTripdata}
+# The trip data is "all" MRIP data, so we need to do a few things before we can compute total effort at the stock-year level
+# Subset to our geographic region
+# Subset to the trips that target our species.
+# Assign statistical areas
+# Use statistical areas to assign to stock areas
+
+# 2004 or later
+Tripdata  <- Tripdata %>% 
+  filter(year>=2004)
+
+# Northeast, Mid-Atlantic, or North Carolina
+Tripdata <- Tripdata %>% 
+  filter(sub_reg %in% c(4,5) | st==37) 
+
+
+
+# fix the var_id
+# create a binned mode that aggregates the for-hire together
+# keep just some of the columns that I need.
+Tripdata <- Tripdata %>% 
+  mutate(var_id = ifelse(var_id=="",strat_id,var_id),
+         mode_fc = mode_fx,
+         mode_fc= ifelse(mode_fc%in%c("5","6"),"4",mode_fc)) %>%
+  select(strat_id,
+                psu_id,
+                id_code,
+                st,
+                cnty,
+                intsite,
+                wave,
+                mode_fc,
+                var_id,
+                region, 
+                sub_reg,
+                wp_int,
+                year, 
+                intsite,
+                tsn1,
+                tsn2, 
+              prim1_common,
+             prim2_common) 
+
+# sort
+Tripdata  <- Tripdata %>% 
+  arrange(strat_id, psu_id, id_code) 
+
+
+
+
+##############################################################
+# Keep rows that are among the species that we are interested in.  
+
+# make a vector of the itis names
+tsns<-fmp_listing %>%
+  select(itis_tsn,fmp,council) %>%
+  mutate(in_fmp_keyfile=1)
+
+# Inner join to the keyfile to keep just the trips that are in the fmp listing 
+Tripdata2  <- Tripdata %>% 
+  inner_join(tsns, by=join_by(tsn1==itis_tsn))
+
+
+# assign to statistical areas
+# state, county, and intsite are needed to uniquely join.
+Tripdata  <- Tripdata %>% 
+  left_join(site_list, by=join_by(st==state_code, cnty==county_code,intsite==intsite))
+
+# Create the directed trip indicator, convert the mode and Region variables to factors.    
+REC_DATA<-Tripdata %>%  
+  mutate(dtrip=1,
+         mode_fc=factor(mode_fc,levels=c("3","4","7"),
+                        labels=c("Shore","Party_Charter","Private_Rental")),
+         Region=factor(sub_reg,levels=c("4","5","6"),
+                       labels=c("NE","MA", "NC")))
+
+# Add in the stock area definitions, which area at the itis_tsn and statistical area.
+REC_DATA<-REC_DATA %>%
+  left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area))
+
+
+
+# 
+REC_DATA<-REC_DATA %>%
+  mutate(stockarea = case_when(
+         itis_tsn %in% out_of_area_species ~ "Unit",
+         .default=stockarea)
+)
+
+
+saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
+
+```
+
+The stock areas from CAMS are a bit messy, it doesn't actually include everything. 
+
+```{r data_clean_stockarea}
+
+if (params$finished_switch == "placeholder") {
+  REC_DATA<-REC_DATA %>%
+    filter(year>=2006)
+}
+
+
+#REC_DATA<-readRDS(file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
+
+REC_DATA<-REC_DATA %>%
+  mutate(missing=is.na(stockarea))
+# look at the missing stockarea
+table(REC_DATA$prim1_common,REC_DATA$missing)
+#It's not too bad, the only one that has any missing==FALSE and 2 stock areas is Black Sea Bass.
+# We can deal with it based on state.
+# 
+# test<-REC_DATA %>% 
+#   filter(missing==TRUE & target_common=="BLACK SEA BASS")
+# test2<-REC_DATA %>% 
+#   filter(missing==FALSE & target_common=="BLACK SEA BASS")
+
+
+ test2<-REC_DATA %>% 
+   filter(missing==TRUE & prim1_common=="ATLANTIC COD")
+
+#Black sea bass
+REC_DATA<-REC_DATA %>%
+  mutate(stockarea = case_when(
+    tsn1==167687 & st %in% c(9,25,33,44) & is.na(stockarea)~ "NORTH",
+    tsn1==167687 & st %in% c(10,24,36,37, 51)  & is.na(stockarea) ~ "SOUTH",
+    tsn1==167687 & st ==34 & cnty %in% c(3,13,17,23,39)  & is.na(stockarea) ~ "NORTH",
+    tsn1==167687 & st ==34 & cnty %in% c(1,5,9,11,29)  & is.na(stockarea)~ "SOUTH",
+    .default = stockarea  )
+  )
+
+
+#Lone red hake
+REC_DATA<-REC_DATA %>%
+  mutate(stockarea = case_when(
+    tsn1==164730 & st %in% c(10,24,36,37, 51)  & is.na(stockarea) ~ "SOUTHERN",
+    .default = stockarea  )
+  )
+           
+REC_DATA<-REC_DATA %>%
+  mutate(stockarea = case_when(
+    is.na(stockarea)~ "Unit",
+  .default = stockarea  )
+)
+
+REC_DATA<-REC_DATA %>%
+  mutate(missing=is.na(stockarea))
+
+table(REC_DATA$missing)
+
+```
+
+
+## Compute Recreational Effort
+
+```{r compute_trips}
+
+# construct the object that describes the survey design.
+
+Effortdesign <- svydesign(
+  ids = ~psu_id, 
+  strata = ~var_id, # Specify the strata variable
+  weights = ~wp_int, # Specify the weight variable
+  data = REC_DATA,
+  nest=TRUE
+)
+
+# Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
+Effortmeans <- svyby(~dtrip, by=~year+tsn1+mode_fc+stockarea,
+                     svytotal,
+                     design=Effortdesign)
+
+# Round
+Effortmeans$dtrip <- ceiling(Effortmeans$dtrip)
+Effortmeans$se <- ceiling(Effortmeans$se)
+
+```
+
+
+```{r compute_rec_expenses}
+if (params$finished_switch=="placeholder"){
+  cost<-50
+} else if  (params$finished_switch=="finished") {
+  # This will require a join to the 2022 expenditure survey data. 
+}
+```
+
+
+## Format the commercial and recreational data.
+    
+```{r save}	
+    
+Recreational_Expenditures<-Effortmeans %>%
+  mutate(value=cost*dtrip) %>%
+  group_by(year,tsn1,stockarea) %>%
+  summarise(recreational_value=sum(value))
+
+saveRDS(Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{params$finished_switch}_{vintage_string}.Rds")))
+
+
+```
+
+
+
