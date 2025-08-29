@@ -73,14 +73,21 @@ fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage
 
 # Read in Stock keyfile												  
 stock_keyfile<-readRDS(file=here("data_folder", "main", glue("stock_keyfile_{vintage_string}.Rds")))
-
-# load in the MRIP site list
-site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{vintage_string}.Rds")))
-# Read in trip data
-Tripdata<-readRDS(file=here("data_folder","raw",glue("rectrip_{vintage_string}.Rds")))
-
 # Read in Deflators
+
 deflators<-readRDS(file=here("data_folder","raw",glue("deflators_{vintage_string}.Rds")))
+
+
+#Read in rec data
+rec_vintage_string<-list.files(here("data_folder","raw"), pattern=glob2rx("mrip_sites_*Rds"))
+rec_vintage_string<-gsub("mrip_sites_","",rec_vintage_string)
+rec_vintage_string<-gsub(".Rds","",rec_vintage_string)
+rec_vintage_string<-max(rec_vintage_string)
+# load in the MRIP site list
+site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{rec_vintage_string}.Rds")))
+# Read in trip data
+Tripdata<-readRDS(file=here("data_folder","raw",glue("rectrip_{rec_vintage_string}.Rds")))
+
 ```
 
 ```{r process_deflators, include=FALSE}
@@ -462,8 +469,9 @@ Recreational_Expenditures<-Recreational_Expenditures %>%
   arrange(council, fmp, itis_name,stockarea, year) %>%
   select(-nespp3)
 
-saveRDS(Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{params$finished_switch}_{vintage_string}.Rds")))
+saveRDS(Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{params$finished_switch}_{rec_vintage_string}.Rds")))
 
+write.csv(x = Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{params$finished_switch}_{rec_vintage_string}.csv")))
 
 ```
 
