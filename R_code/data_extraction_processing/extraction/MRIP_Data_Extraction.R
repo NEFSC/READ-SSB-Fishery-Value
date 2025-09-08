@@ -42,6 +42,28 @@ Tripdata <- ldply(filelist, function(x) {
   return(temp)
 })
 
+
+
+# How often do I have trips without a prim1_common or prim2_common?
+Tripdatacheck<-Tripdata %>%
+  mutate(notargeting=case_when(
+    is.na(prim1_common) ~ 1,
+    prim1_common=="" & prim2_common==""~ 1,
+    .default=0
+  ))
+
+
+Tripdatacheck<-Tripdatacheck %>%
+  mutate(missingtsn=case_when(
+    is.na(prim1) ~ 1,
+    prim1=="" ~ 1,
+    .default=0
+  ))
+table(Tripdatacheck$year,Tripdatacheck$missingtsn)
+
+table(Tripdatacheck$year,Tripdatacheck$notargeting)
+
+
 saveRDS(Tripdata, file=here("data_folder","raw",glue("rectrip_{vintage_string}.Rds")))
 
 
@@ -54,24 +76,24 @@ saveRDS(Tripdata, file=here("data_folder","raw",glue("rectrip_{vintage_string}.R
 #################################################################################
 #################################################################################
 # 
-# 
-# filelist <- list.files(file.path(mrip_location), 
-#                        pattern=glob2rx("catch_20*.sas7bdat"),
-#                        full.names = TRUE) 
-# filelist <- filelist[!grepl("orig*",filelist)]
-# filelist <- filelist[!grepl("Copy*",filelist)]
-# filelist <- filelist[!grepl("bak*",filelist)]
-# filelist <- filelist[!grepl("delete*",filelist)]
-# filelist <- filelist[!grepl("catch_1981",filelist)]
-# filelist <- filelist[!grepl(paste0("catch_",Incomplete_year,sep=""),filelist)]
-# filelist <- filelist[!grepl("1.sas7bdat",filelist)]
-# 
-# Catchdata <- ldply(filelist, function(x) {
-#   temp <- read_sas(x)
-#   names(temp) <- tolower(names(temp))
-#   return(temp)
-# })
-# saveRDS(Catchdata, file=here("data_folder","raw",glue("reccatch_{vintage_string}.Rds")))
+
+filelist <- list.files(file.path(mrip_location),
+                       pattern=glob2rx("catch_20*.sas7bdat"),
+                       full.names = TRUE)
+filelist <- filelist[!grepl("orig*",filelist)]
+filelist <- filelist[!grepl("Copy*",filelist)]
+filelist <- filelist[!grepl("bak*",filelist)]
+filelist <- filelist[!grepl("delete*",filelist)]
+filelist <- filelist[!grepl("catch_1981",filelist)]
+filelist <- filelist[!grepl(paste0("catch_",Incomplete_year,sep=""),filelist)]
+filelist <- filelist[!grepl("1.sas7bdat",filelist)]
+
+Catchdata <- ldply(filelist, function(x) {
+  temp <- read_sas(x)
+  names(temp) <- tolower(names(temp))
+  return(temp)
+})
+saveRDS(Catchdata, file=here("data_folder","raw",glue("reccatch_{vintage_string}.Rds")))
 
 
 
