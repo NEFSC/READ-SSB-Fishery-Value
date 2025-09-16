@@ -7,15 +7,6 @@ output:
     df_print: paged
     keep_md: yes
     fig_caption: yes
-params:
-  finished_switch:
-    value: placeholder
-    choices:
-    - placeholder
-    - finished
-  deflate_year:
-    value: 2024
-
 ---
 
 ```{r setup, include=FALSE}
@@ -34,6 +25,7 @@ library(kableExtra)
 library(glue)
 library(survey)
 library(fredr)
+library(scales)
 library(conflicted)
 conflicts_prefer(dplyr::filter)
 conflicts_prefer(lubridate::year)
@@ -75,9 +67,6 @@ fmp_listing<-readRDS(file=here("data_folder", "main", glue("fmp_listing_{vintage
 stock_keyfile<-readRDS(file=here("data_folder", "main", glue("stock_keyfile_{vintage_string}.Rds")))
 # Read in Deflators
 
-deflators<-readRDS(file=here("data_folder","raw",glue("deflators_{vintage_string}.Rds")))
-
-
 #Read in rec data
 rec_vintage_string<-list.files(here("data_folder","raw"), pattern=glob2rx("mrip_sites_*Rds"))
 rec_vintage_string<-gsub("mrip_sites_","",rec_vintage_string)
@@ -88,18 +77,35 @@ site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{rec_vintage_s
 # Read in trip data
 Tripdata<-readRDS(file=here("data_folder","raw",glue("rectrip_{rec_vintage_string}.Rds")))
 
-```
+# Read in Trip Expenditure data
+impact.data0.2022=read.csv(here("data_folder","external","Trip_Exp_Imp_2022survey.csv")) %>%
+  mutate(State=trimws(State))%>%
+  rename(mode=MODE, 
+         state=State)
 
-```{r process_deflators, include=FALSE}
 
-deflate_base<-deflators %>%
-  filter(year==params$deflate_year)%>%
-  pull(value)
+# Read in Value Add multipliers
+impact.data0.2022.1=read.csv(here("data_folder","external","trip_impacts_multipliers_2022.csv")) %>%
+  rename(mode = Mode) %>%
+  filter(mode != "Total Trip",state3=="United States") %>%
+  select(mode,m_va22)
 
-# multiply a NOMINAL value by the deflation multiplier to get REAL 'base-year' dollars
-deflators<-deflators %>%
-  mutate(deflation_multiplier  = deflate_base/value) %>%
-  select(year,series_id,deflation_multiplier)
+
+# Read in state fips codes and names
+
+url <- "https://www2.census.gov/geo/docs/reference/codes2020/national_state2020.txt"
+
+states <- read_delim(here("data_folder","external","national_state2020.txt"), 
+                         delim = "|", 
+                         col_types = cols(.default = "c"),  # read all as character initially
+                         show_col_types = FALSE)
+states<- states %>%
+  rename(state=STATE_NAME,
+         stateabb=STATE,
+         statefp=STATEFP)%>%
+  select(stateabb,statefp,state)%>%
+  mutate(statefp_string=statefp)%>%
+  mutate(statefp=as.numeric(statefp))
 
 ```
 
@@ -153,7 +159,7 @@ out_of_geog<-fmp_listing %>%
 ```
 
 ### HMS and SERO 
-HMS, and SERO. 
+HMS, and SERO. Southeast Science center is on this.
 
 
 ```{r HMS_SERO}
@@ -173,8 +179,42 @@ These are a mixed of state managed stocks
 
 # Expenditures for Recreational
 
-Recreational expenditures are computed based on trips and the first target species.  We use the ``RECDBS.MRIP_COD_ALL_SITE_LIST`` table to assign each state-county-intsite to a statistical area. We allocate recreational effort to the stock in the same way we allocate commercial effort (a modified version of ``cams_garfo.cfg_statarea_stock``).
+Recreational expenditures are computed based on trips and the first target species.  We use the ``RECDBS.MRIP_COD_ALL_SITE_LIST`` table to assign each state-county-intsite to a three digit statistical area. We use a lightly modified version of ``cams_garfo.cfg_statarea_stock`` to allocate recreational effort to the stock level in the same way we allocate commercial effort.
 
+
+## Process Expenditure data 
+
+Finagle the names of certain columns.  Join the expenditure data to the multipliers data on mode. Join the result to the state fips codes, on state.  Subset to the states in the Northeast Region, round, and
+
+```{r table_of_expenditures}
+
+impact.data0.2022.mod <- impact.data0.2022 %>%
+  left_join(impact.data0.2022.1, by = join_by(mode==mode))
+
+impact.data0.2022.mod <- impact.data0.2022.mod %>%
+  left_join(states,by = join_by(state==state))%>%
+  arrange(statefp, stateabb,state,mode)
+  
+mid_atlantic<-c("RI","CT","NY","NJ","PA","DE","DC","VA","MD","NC")
+new_england<-c("ME","NH","MA","RI","VT")
+my_states<-c(new_england,mid_atlantic)
+
+filtered_states<-impact.data0.2022.mod %>% filter(stateabb %in% unique(my_states)) %>%
+  mutate(adult_per=percent(adult_per,accuracy=1),
+         total_avg=dollar(total_avg)) %>%
+  select(state,mode,total_avg,adult_per,m_va22)
+
+kbl(filtered_states,digits=2,
+      col.names = c("State","Mode","Expenditure/Trip","Adult Share","Value-Added Multiplier")) %>% kable_classic()
+
+
+
+```
+
+
+## Prepare site data
+
+Keep just some of the site list data.  There are some MRIP sites that are not in the the ``RECDBS.MRIP_COD_ALL_SITE_LIST`` table. For these sites, we will just assign statistical area based on the most frequent statistical area in that county. Nearly all sites with the same county have the same statistical area.
 
 ```{r Prepare_sites}
 
@@ -193,22 +233,25 @@ county_list<-site_list %>%
 
 ```
 
-```{r read_and_prepTripdata}
-# The trip data is "all" MRIP data, so we need to do a few things before we can compute total effort at the stock-year level
-# Subset to our geographic region
-# Subset to the trips that target our species.
-# Assign statistical areas
-# Use statistical areas to assign to stock areas
+## Prepare MRIP trip data
 
-# 2004 or later
+The trip data is "all" MRIP data, so we need to do a few things before we can compute total effort at the stock-year level. We:
+
+* Subset to our geographic region (region 4, region 5 plus North carolina). 
+* Bin the modes together.
+* Drop some columns.
+* Subset to the trips that target our species and bring in the Council/FMP. 
+
+
+```{r read_and_prepTripdata}
+
+# 2018-2024 or later
 Tripdata  <- Tripdata %>% 
-  filter(year>=2004)
+  filter(year>=2018 & year<=2024) 
 
 # Northeast, Mid-Atlantic, or North Carolina
 Tripdata <- Tripdata %>% 
   filter(sub_reg %in% c(4,5) | st==37) 
-
-
 
 # fix the var_id
 # create a binned mode that aggregates the for-hire together
@@ -216,7 +259,7 @@ Tripdata <- Tripdata %>%
 Tripdata <- Tripdata %>% 
   mutate(var_id = ifelse(var_id=="",strat_id,var_id),
          mode_fc = mode_fx,
-         mode_fc= ifelse(mode_fc%in%c("5","6"),"4",mode_fc)) %>%
+         mode_fc= ifelse(mode_fc%in%c("5","6"),"4",mode_fc)) %>% # 3=shore, 4=for-hire, 7=private boat
   select(strat_id,
                 psu_id,
                 id_code,
@@ -257,7 +300,10 @@ Tripdata  <- Tripdata %>%
 
 ```
 
+## Assign trips to stock areas
 
+* Assign statistical areas, based on intsite, filling in mismatches with a county-level statistical area.
+* Join to the stock definitions
 
 
 ```{r join_to_statistical}
@@ -311,18 +357,12 @@ REC_DATA<-REC_DATA %>%
 #   group_by(prim1_common) 
 # 
 # 
-# saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
 
 ```
 
-```{r placeholder_handle}
-#REC_DATA<-readRDS(file=here("data_folder","main",glue("REC_DATA_{params$finished_switch}_{vintage_string}.Rds")))
-if (params$finished_switch == "placeholder") {
-  REC_DATA<-REC_DATA %>%
-    filter(year>=2006)
-}
-```
+## Manual data cleaning is inevitable
 
+The table that maps ``intsite`` to ``nmfs_stat_area`` was designed for cod.  There are some intsites in the south that doe not appear in this table. Fortunately, most mis-matches are easy to resolve.
 
 ```{r data_clean_stockarea}
 
@@ -375,7 +415,7 @@ REC_DATA<-REC_DATA %>%
     .default = stockarea  )
   )
 
-           
+# Fill in with "unit" for rows where there is no stockarea.     
 REC_DATA<-REC_DATA %>%
   mutate(stockarea = case_when(
     is.na(stockarea)~ "Unit",
@@ -385,7 +425,7 @@ REC_DATA<-REC_DATA %>%
 REC_DATA<-REC_DATA %>%
   mutate(missing=is.na(stockarea))
 
-# A species cannot be "UNIT" and something else.  
+# A species cannot be "Unit" and something else.  
 test3<-REC_DATA %>%
     mutate(check1 = case_when(
     stockarea=="Unit"~  "Unit",
@@ -400,22 +440,25 @@ problems<-test3 %>%
   filter(count>1)
 
 stopifnot(nrow(problems)==0)
+saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{vintage_string}.Rds")))
 
 
 ```
 
+That was the last data cleaning step.
+
 
 ## Compute Recreational Effort
 
+This step computes an yearly estimate of trips by mode that target the stock defined by ``tsn`` and ``stockarea.``  We need mode because expenditures vary by mode.
+
 ```{r compute_trips}
-
-
-
-# Create the directed trip indicator, convert the mode and Region variables to factors.    
+# Create the directed trip indicator, convert the mode to a factor that matches the expenditure survey. 
+# Convert and Region variables to factors.    
 REC_DATA<-REC_DATA %>%  
   mutate(dtrip=1,
          mode_fc=factor(mode_fc,levels=c("3","4","7"),
-                        labels=c("Shore","Party_Charter","Private_Rental")),
+                        labels=c("Shore","For-Hire","Private Boat")),
          Region=factor(sub_reg,levels=c("4","5","6"),
                        labels=c("NE","MA", "NC")))
 
@@ -432,7 +475,7 @@ Effortdesign <- svydesign(
 )
 
 # Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
-Effortmeans <- svyby(~dtrip, by=~year+tsn1+mode_fc+stockarea,
+Effortmeans <- svyby(~dtrip, by=~year+st+tsn1+mode_fc+stockarea,
                      svytotal,
                      design=Effortdesign)
 
@@ -440,38 +483,64 @@ Effortmeans <- svyby(~dtrip, by=~year+tsn1+mode_fc+stockarea,
 Effortmeans$dtrip <- ceiling(Effortmeans$dtrip)
 Effortmeans$se <- ceiling(Effortmeans$se)
 
+Effortmeans<-Effortmeans %>%
+  mutate(mode_str= as.character(mode_fc))
+
 ```
+
+## Calculating Value-Added
+
+The formula for calculating the value-added, $v_{i,t,s}$, for state, $i$, mode, $t$, and species, $s$, combination is as follows:
+
+$$
+v_{i,t,s} = D_{i,t,s} * a_{i,t} * e_{i,t} * m_{t}
+$$
+
+where $D_{i,t,s}$ is the total target trips, $a_{i,t}$ is the share of adults, $e_{i,t}$ is the expenditure per trip, and $m_{i}$ is the value-added multiplier. To implement this formula we combine the trips and the expenditure impact data and perform the calculations. 
 
 
 ```{r compute_rec_expenses}
-if (params$finished_switch=="placeholder"){
-  cost<-50
-} else if  (params$finished_switch=="finished") {
-  # This will require a join to the results 2022 expenditure survey data. 
-  # You may also need to look up previous survey results to fill in costs from previous years.
+impact.data0 <- Effortmeans %>%
+  left_join(impact.data0.2022.mod,by = join_by(st==statefp, mode_str==mode)) %>%
+  mutate(
+    # Multiply total number of trips by the adult percentage
+    AdultTrips_maxyr = dtrip * adult_per ,
+   
+    # Multiply adult trips by average expenditures to get total expenditures
+    TotalExpenditures_2022 = AdultTrips_maxyr * total_avg,
+   
+    # Multiply total expenditures by the multipliers to get the impacts
+    ValueAdded_maxyr = m_va22 * TotalExpenditures_2022
+    )
 }
+saveRDS(impact.data0, file=here("data_folder","main",glue("impact.data_{vintage_string}.Rds")))
+
 ```
 
 
-## Format the commercial and recreational data.
+## Format the recreational data.
     
 ```{r save}	
-  
-Recreational_Expenditures<-Effortmeans %>%
-  mutate(value=cost*dtrip) %>%
+  # Compute value
+Recreational_Expenditures<-impact.data0 %>%
   group_by(year,tsn1,stockarea) %>%
-  summarise(recreational_value=sum(value))
+  summarise(ValueAdded_maxyr=sum(ValueAdded_maxyr))
 
+# Join to the 'stock' information, which contains info on the manager and des
 Recreational_Expenditures<-Recreational_Expenditures %>%
   rename(itis_tsn=tsn1) %>%
   left_join(fmp_listing, by=join_by(itis_tsn==itis_tsn)) %>%
   relocate(council, fmp, itis_tsn, itis_sci_name, itis_name, stockarea)%>%
   arrange(council, fmp, itis_name,stockarea, year) %>%
+  rename(manager=council) %>%
   select(-nespp3)
 
-saveRDS(Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{params$finished_switch}_{rec_vintage_string}.Rds")))
+Recreational_Expenditures<-Recreational_Expenditures %>%
+  mutate(ValueAdded_maxyr=dollar(ValueAdded_maxyr)) 
 
-write.csv(x = Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{params$finished_switch}_{rec_vintage_string}.csv")))
+saveRDS(Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{rec_vintage_string}.Rds")))
+
+write.csv(x = Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{rec_vintage_string}.csv")))
 
 ```
 
