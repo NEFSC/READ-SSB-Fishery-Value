@@ -92,8 +92,7 @@ impact.data0.2022.1=read.csv(here("data_folder","external","trip_impacts_multipl
 
 
 # Read in state fips codes and names
-
-url <- "https://www2.census.gov/geo/docs/reference/codes2020/national_state2020.txt"
+#url <- "https://www2.census.gov/geo/docs/reference/codes2020/national_state2020.txt"
 
 states <- read_delim(here("data_folder","external","national_state2020.txt"), 
                          delim = "|", 
