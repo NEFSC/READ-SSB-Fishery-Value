@@ -468,7 +468,7 @@ Effortdesign <- svydesign(
 )
 ```
 
-```{r compute_trips, eval=TRUE}
+```{r compute_trips, eval=FALSE}
 # This takes a while, so set eval=TRUE only for the first time you run.
 # Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
 RecreationalTrips <- svyby(~dtrip, by=~year+st+tsn1+mode_fc+stockarea,
@@ -533,12 +533,45 @@ Recreational_Expenditures<-Recreational_Expenditures %>%
   rename(manager=council) %>%
   select(-nespp3)
 
-Recreational_Expenditures<-Recreational_Expenditures %>%
-  mutate(ValueAdded_maxyr=dollar(ValueAdded_maxyr)) 
-
 saveRDS(Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{rec_vintage_string}.Rds")))
 
 write.csv(x = Recreational_Expenditures, file=here("data_folder","main",glue("Recreational_Expenditures_{rec_vintage_string}.csv")))
+
+# Keep only the rows in the Northeast
+
+Recreational_Expenditures_NER<-Recreational_Expenditures %>%
+  filter(is.na(manager)==0)
+
+
+saveRDS(Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_NERmanaged_{rec_vintage_string}.Rds")))
+
+write.csv(x = Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_NERmanaged_{rec_vintage_string}.csv")))
+
+
+# Average over the 2018-2024 time period. Excuse the hard coded 7.
+
+Recreational_Expenditures_NER<-Recreational_Expenditures_NER %>%
+  group_by(manager, fmp, itis_tsn, itis_sci_name, itis_name, stockarea) %>%
+  summarise(avg_ValueAdded_maxyr=sum(ValueAdded_maxyr)/7)
+
+
+saveRDS(Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_avg_NER_managed{rec_vintage_string}.Rds")))
+
+write.csv(x = Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_avg_NER_managed{rec_vintage_string}.csv")))
+
+
+
+Recreational_Expenditures_NER <- Recreational_Expenditures_NER %>%
+  mutate(avg_ValueAdded_maxyr=dollar(avg_ValueAdded_maxyr)) %>%
+  ungroup()
+
+
+ knitr::kable(Recreational_Expenditures_NER  %>%
+    select(-c(itis_tsn, itis_sci_name)),
+    col.names = c("Manager","FMP","Species Name","Stock","Value-Added"),
+    caption='Average Value added 2018-2024',format.args = list(big.mark = ","), digits=0, align=c("l", "l","l","l","l") ) 
+
+
 
 ```
 
