@@ -47,7 +47,6 @@ here::i_am("writing/Recreational_Value.Rmd")
 # Get MRIP sites
 source(here("R_code", "data_extraction_processing", "extraction","MRIP_sites.R"))
 
-     
 # Get MRIP catch and effort data
 source(here("R_code", "data_extraction_processing", "extraction","MRIP_Data_Extraction.R"))
 ```
@@ -331,21 +330,13 @@ REC_DATA<-Tripdata %>%
   left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area))
 
 
-# Just mark anything that is not in our area as "Unit"
+
+# This is code used to look at any species market as No Federal FMP 
 # test2<-REC_DATA %>%
 #   filter(fmp %in% "No Federal FMP")
 # 
 # table(test2$prim1_common)
-
-
-# Fill in missing stockareas for things that are not NER managed with "Unit"
-REC_DATA<-REC_DATA %>%
-   mutate(stockarea = case_when(
-          fmp %in% "No Federal FMP" & is.na(stockarea)~ "Unit",
-          .default=stockarea)
- )
-
-
+# This is code used to look at any species I have left with out a stockarea.  
 # test3<-REC_DATA %>%
 #    filter(is.na(stockarea)) %>%
 #   group_by(prim1_common) %>%
@@ -356,6 +347,17 @@ REC_DATA<-REC_DATA %>%
 #   group_by(prim1_common) 
 # 
 # 
+
+
+
+# Fill in missing stockareas for things that are not NER managed with "Unit".
+# This may or may not be correct, but for these purposes it doesn't matter.
+REC_DATA<-REC_DATA %>%
+   mutate(stockarea = case_when(
+          fmp %in% "No Federal FMP" & is.na(stockarea)~ "Unit",
+          .default=stockarea)
+ )
+
 
 ```
 
@@ -368,8 +370,12 @@ The table that maps ``intsite`` to ``nmfs_stat_area`` was designed for cod.  The
 
 REC_DATA<-REC_DATA %>%
   mutate(missing=is.na(stockarea))
+
 # look at the missing stockarea
-table(REC_DATA$prim1_common,REC_DATA$missing)
+#table(REC_DATA$prim1_common,REC_DATA$missing)
+# If our data is good, nothing is missing
+
+
 #It's not too bad, the only one that has any missing==FALSE and 2 stock areas is Black Sea Bass.
 # We can deal with it based on state.
 # 
@@ -440,8 +446,6 @@ problems<-test3 %>%
 
 stopifnot(nrow(problems)==0)
 saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{vintage_string}.Rds")))
-
-
 ```
 
 That was the last data cleaning step.
@@ -451,19 +455,14 @@ That was the last data cleaning step.
 
 This step computes an yearly estimate of trips by mode that target the stock defined by ``tsn`` and ``stockarea.``  We need mode because expenditures vary by mode.
 
-```{r compute_trips}
+```{r setup_survey_object}
 # Create the directed trip indicator, convert the mode to a factor that matches the expenditure survey. 
-# Convert and Region variables to factors.    
 REC_DATA<-REC_DATA %>%  
   mutate(dtrip=1,
          mode_fc=factor(mode_fc,levels=c("3","4","7"),
-                        labels=c("Shore","For-Hire","Private Boat")),
-         Region=factor(sub_reg,levels=c("4","5","6"),
-                       labels=c("NE","MA", "NC")))
-
-
-
-# construct the object that describes the survey design.
+                        labels=c("Shore","For-Hire","Private Boat"))
+  )
+         # construct the object that describes the survey design.
 
 Effortdesign <- svydesign(
   ids = ~psu_id, 
@@ -472,18 +471,23 @@ Effortdesign <- svydesign(
   data = REC_DATA,
   nest=TRUE
 )
+```
 
+```{r compute_trips, eval=TRUE}
+# This takes a while
 # Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
-Effortmeans <- svyby(~dtrip, by=~year+st+tsn1+mode_fc+stockarea,
+RecreationalTrips <- svyby(~dtrip, by=~year+st+tsn1+mode_fc+stockarea,
                      svytotal,
                      design=Effortdesign)
 
-# Round
-Effortmeans$dtrip <- ceiling(Effortmeans$dtrip)
-Effortmeans$se <- ceiling(Effortmeans$se)
+# Round, convert mode_fc to character
+RecreationalTrips<-RecreationalTrips %>%
+  mutate(dtrip=ceiling(dtrip),
+         se <- ceiling(se),
+         mode_str= as.character(mode_fc)
+)
 
-Effortmeans<-Effortmeans %>%
-  mutate(mode_str= as.character(mode_fc))
+saveRDS(RecreationalTrips, file=here("data_folder","main",glue("RecreationalTrips_{vintage_string}.Rds")))
 
 ```
 
@@ -499,7 +503,9 @@ where $D_{i,t,s}$ is the total target trips, $a_{i,t}$ is the share of adults, $
 
 
 ```{r compute_rec_expenses}
-impact.data0 <- Effortmeans %>%
+RecreationalTrips<-readRDS(file=here("data_folder","main",glue("RecreationalTrips_{vintage_string}.Rds")))
+
+RecreationalTrips <- RecreationalTrips %>%
   left_join(impact.data0.2022.mod,by = join_by(st==statefp, mode_str==mode)) %>%
   mutate(
     # Multiply total number of trips by the adult percentage
@@ -511,8 +517,6 @@ impact.data0 <- Effortmeans %>%
     # Multiply total expenditures by the multipliers to get the impacts
     ValueAdded_maxyr = m_va22 * TotalExpenditures_2022
     )
-}
-saveRDS(impact.data0, file=here("data_folder","main",glue("impact.data_{vintage_string}.Rds")))
 
 ```
 
@@ -521,7 +525,7 @@ saveRDS(impact.data0, file=here("data_folder","main",glue("impact.data_{vintage_
     
 ```{r save}	
   # Compute value
-Recreational_Expenditures<-impact.data0 %>%
+Recreational_Expenditures<-RecreationalTrips %>%
   group_by(year,tsn1,stockarea) %>%
   summarise(ValueAdded_maxyr=sum(ValueAdded_maxyr))
 
