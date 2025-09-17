@@ -473,8 +473,8 @@ Effortdesign <- svydesign(
 )
 ```
 
-```{r compute_trips, eval=TRUE}
-# This takes a while
+```{r compute_trips, eval=FALSE}
+# This takes a while, so set eval=TRUE only for the first time you run.
 # Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
 RecreationalTrips <- svyby(~dtrip, by=~year+st+tsn1+mode_fc+stockarea,
                      svytotal,
