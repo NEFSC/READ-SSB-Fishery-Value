@@ -562,7 +562,7 @@ write.csv(x = Recreational_Expenditures_NER, file=here("data_folder","main",glue
 
 
 Recreational_Expenditures_NER <- Recreational_Expenditures_NER %>%
-  mutate(avg_ValueAdded_maxyr=dollar(avg_ValueAdded_maxyr)) %>%
+  mutate(avg_ValueAdded_maxyr=dollar(avg_ValueAdded_maxyr, accuracy=1 )) %>%
   ungroup()
 
 
