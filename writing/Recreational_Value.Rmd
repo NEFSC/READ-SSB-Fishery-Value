@@ -111,39 +111,25 @@ states<- states %>%
 
 This document describes how we assemble Gross Expenditures for Recreational at the stock level.
 
-## Which stocks do I have
-
+## Which stocks 
 Print out a table of stocks by manager. This is just an easy way to make sure we have what we are expecting.
-
-
-```{r keyfiles}
-ASFMC<-stock_keyfile %>%
-  filter(council == "ASMFC" | council=="ASMFC/NEFMC")
-
-
-MAFMC<-stock_keyfile %>%
-  filter(council == "MAFMC" | council=="MAFMC/NEFMC")
-
-NEFMC<-stock_keyfile %>%
-  filter(council == "NEFMC" | council=="MAFMC/NEFMC"  | council=="ASMFC/NEFMC")
-
-Non_Managed<-stock_keyfile %>%
-  filter(is.na(council))
-
-out_of_geog<-fmp_listing %>%
-  filter(fmp  %in% c("SERO FMP","Highly Migratory Species"))
-```
 
 ### ASMFC stocks
 
 ```{r ASFMC_stocks}
- knitr::kable(ASFMC %>% select(-c(council, itis_tsn)), caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(stock_keyfile %>%
+  filter(council == "ASMFC" | council=="ASMFC/NEFMC")
+  %>% select(-c(council, itis_tsn)),
+  caption='ASMFC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","l") ) 
 
 ```
 ### MAFMC stocks
 
 ```{r MAFMC_stocks}
- knitr::kable(MAFMC  %>% select(-c(council, itis_tsn)), caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(stock_keyfile %>%
+  filter(council == "MAFMC" | council=="MAFMC/NEFMC")  %>%
+  select(-c(council, itis_tsn)),
+  caption='MAFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","l") ) 
 
 ```
 
@@ -152,7 +138,10 @@ out_of_geog<-fmp_listing %>%
 
 ```{r NEFMC_stocks}
 
- knitr::kable(NEFMC  %>% select(-c(council, itis_tsn)), caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(stock_keyfile %>%
+  filter(council == "NEFMC" | council=="MAFMC/NEFMC"  | council=="ASMFC/NEFMC")  %>% 
+  select(-c(council, itis_tsn)), 
+  caption='NEFMC stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","l") ) 
 
 ```
 
@@ -161,7 +150,8 @@ HMS, and SERO. Southeast Science center is on this.
 
 
 ```{r HMS_SERO}
- knitr::kable(out_of_geog  %>% select(c(fmp, itis_name)), caption='HMS and SERO stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(fmp_listing %>%
+  filter(fmp  %in% c("SERO FMP","Highly Migratory Species"))  %>% select(c(fmp, itis_name)), caption='HMS and SERO stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","l") ) 
 
 ```
 ### Non-Managed
@@ -170,15 +160,15 @@ These are a mixed of state managed stocks
 
 
 ```{r Non-Managed}
- knitr::kable(Non_Managed  %>% select(-c(council, itis_tsn)), caption='Non-Northest Region stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","r") ) 
+ knitr::kable(stock_keyfile %>%
+  filter(fmp=="No Federal FMP")  %>%
+  arrange(itis_name) %>%
+  select(-c(council, itis_tsn)), caption='Non-Northeast Region stocks',format.args = list(big.mark = ","), digits=1, align=c("l", "l","l","l") ) 
 
 ```
 
 
 # Expenditures for Recreational
-
-Recreational expenditures are computed based on trips and the first target species.  We use the ``RECDBS.MRIP_COD_ALL_SITE_LIST`` table to assign each state-county-intsite to a three digit statistical area. We use a lightly modified version of ``cams_garfo.cfg_statarea_stock`` to allocate recreational effort to the stock level in the same way we allocate commercial effort.
-
 
 ## Process Expenditure data 
 
@@ -202,15 +192,19 @@ filtered_states<-impact.data0.2022.mod %>% filter(stateabb %in% unique(my_states
          total_avg=dollar(total_avg)) %>%
   select(state,mode,total_avg,adult_per,m_va22)
 
-kbl(filtered_states,digits=2,
-      col.names = c("State","Mode","Expenditure/Trip","Adult Share","Value-Added Multiplier")) %>% kable_classic()
+knitr::kable(filtered_states,digits=2,
+             col.names = c("State","Mode","Expenditure/Trip","Adult Share","Value-Added Multiplier"),
+             align=c("l", "l","r","r","r"),
+            caption='Expenditure per adult trip, adult share, and value added multipliers') 
 
 
 
 ```
 
 
-## Prepare site data
+
+## Assign trips to stocks.
+Recreational expenditures are computed based on trips and the first target species.  We use the ``RECDBS.MRIP_COD_ALL_SITE_LIST`` table to assign each state-county-intsite to a three digit statistical area. We use a lightly modified version of ``cams_garfo.cfg_statarea_stock`` to allocate recreational effort to the stock level in the same way we allocate commercial effort.
 
 Keep just some of the site list data.  There are some MRIP sites that are not in the the ``RECDBS.MRIP_COD_ALL_SITE_LIST`` table. For these sites, we will just assign statistical area based on the most frequent statistical area in that county. Nearly all sites with the same county have the same statistical area.
 
@@ -274,8 +268,9 @@ Tripdata <- Tripdata %>%
                 intsite,
                 tsn1,
                 tsn2, 
-              prim1_common,
-             prim2_common) 
+                prim1_common,
+                prim2_common
+        ) 
 
 # sort
 Tripdata  <- Tripdata %>% 
@@ -499,7 +494,7 @@ $$
 v_{i,t,s} = D_{i,t,s} * a_{i,t} * e_{i,t} * m_{t}
 $$
 
-where $D_{i,t,s}$ is the total target trips, $a_{i,t}$ is the share of adults, $e_{i,t}$ is the expenditure per trip, and $m_{i}$ is the value-added multiplier. To implement this formula we combine the trips and the expenditure impact data and perform the calculations. 
+where $D_{i,t,s}$ is the total target trips, $a_{i,t}$ is the share of adults, $e_{i,t}$ is the expenditure per adult trip, and $m_{i}$ is the value-added multiplier. To implement this formula we combine the trips and the expenditure impact data and perform the calculations. 
 
 
 ```{r compute_rec_expenses}
