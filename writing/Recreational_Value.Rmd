@@ -478,7 +478,7 @@ RecreationalTrips <- svyby(~dtrip, by=~year+st+tsn1+mode_fc+stockarea,
 # Round, convert mode_fc to character
 RecreationalTrips<-RecreationalTrips %>%
   mutate(dtrip=ceiling(dtrip),
-         se <- ceiling(se),
+         se = ceiling(se),
          mode_str= as.character(mode_fc)
 )
 
@@ -522,7 +522,8 @@ RecreationalTrips <- RecreationalTrips %>%
   # Compute value
 Recreational_Expenditures<-RecreationalTrips %>%
   group_by(year,tsn1,stockarea) %>%
-  summarise(ValueAdded_maxyr=sum(ValueAdded_maxyr))
+  summarise(ValueAdded_maxyr=sum(ValueAdded_maxyr),
+            trips=sum(dtrip))
 
 # Join to the 'stock' information, which contains info on the manager and des
 Recreational_Expenditures<-Recreational_Expenditures %>%
@@ -552,7 +553,8 @@ write.csv(x = Recreational_Expenditures_NER, file=here("data_folder","main",glue
 
 Recreational_Expenditures_NER<-Recreational_Expenditures_NER %>%
   group_by(manager, fmp, itis_tsn, itis_sci_name, itis_name, stockarea) %>%
-  summarise(avg_ValueAdded_maxyr=sum(ValueAdded_maxyr)/7)
+  summarise(avg_ValueAdded_maxyr=sum(ValueAdded_maxyr)/7,
+            trips=sum(trips)/7)
 
 
 saveRDS(Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_avg_NER_managed{rec_vintage_string}.Rds")))
@@ -568,8 +570,8 @@ Recreational_Expenditures_NER <- Recreational_Expenditures_NER %>%
 
  knitr::kable(Recreational_Expenditures_NER  %>%
     select(-c(itis_tsn, itis_sci_name)),
-    col.names = c("Manager","FMP","Species Name","Stock","Value-Added"),
-    caption='Average Value added 2018-2024',format.args = list(big.mark = ","), digits=0, align=c("l", "l","l","l","l") ) 
+    col.names = c("Manager","FMP","Species Name","Stock","Value-Added","Trips"),
+    caption='Average Value-Added and Trips 2018-2024',format.args = list(big.mark = ","), digits=0, align=c("l", "l","l","l","r","r") ) 
 
 
 
