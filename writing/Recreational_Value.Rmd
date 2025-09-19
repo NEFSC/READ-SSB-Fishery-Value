@@ -177,11 +177,16 @@ Finagle the names of certain columns.  Join the expenditure data to the multipli
 ```{r table_of_expenditures}
 
 impact.data0.2022.mod <- impact.data0.2022 %>%
-  left_join(impact.data0.2022.1, by = join_by(mode==mode))
+  left_join(impact.data0.2022.1, by = join_by(mode==mode), relationship="many-to-one")
+
+stopifnot(nrow(impact.data0.2022)==nrow(impact.data0.2022.mod))
 
 impact.data0.2022.mod <- impact.data0.2022.mod %>%
-  left_join(states,by = join_by(state==state))%>%
+  left_join(states,by = join_by(state==state), relationship="many-to-one")%>%
   arrange(statefp, stateabb,state,mode)
+
+stopifnot(nrow(impact.data0.2022)==nrow(impact.data0.2022.mod))
+
   
 mid_atlantic<-c("RI","CT","NY","NJ","PA","DE","DC","VA","MD","NC")
 new_england<-c("ME","NH","MA","RI","VT")
@@ -303,12 +308,15 @@ Tripdata  <- Tripdata %>%
 
 # assign to statistical areas
 # state, county, and intsite are needed to uniquely join.
+
+start_length<-nrow(Tripdata)
+
 Tripdata  <- Tripdata %>% 
-  left_join(site_list, by=join_by(st==state_code, cnty==county_code,intsite==intsite))
+  left_join(site_list, by=join_by(st==state_code, cnty==county_code,intsite==intsite), relationship="many-to-one")
 
 # use the most prevalent stat area by county in case there are missing intsites
 Tripdata  <- Tripdata %>% 
-  left_join(county_list, by=join_by(st==state_code, cnty==county_code))
+  left_join(county_list, by=join_by(st==state_code, cnty==county_code), relationship="many-to-one")
 
 # merge update
 Tripdata<-Tripdata %>%
@@ -322,7 +330,7 @@ Tripdata<-Tripdata %>%
 
 # Add in the stock area definitions, which area at the itis_tsn and statistical area.
 REC_DATA<-Tripdata %>%
-  left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area))
+  left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area), relationship="many-to-one")
 
 
 
