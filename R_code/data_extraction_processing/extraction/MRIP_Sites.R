@@ -8,6 +8,8 @@ conflicts_prefer(dplyr::filter)
 conflicts_prefer(dplyr::mutate)
 conflicts_prefer(dplyr::select)
 
+vintage_string<-format(Sys.Date())
+
 options(scipen=999)
 
 drv<-dbDriver("Oracle")
@@ -21,9 +23,9 @@ here::i_am("R_code/data_extraction_processing/extraction/MRIP_Sites.R")
 
 
 site_list<-dbGetQuery(nova_conn, new_site_list)
+dbDisconnect(nova_conn) 
 
 saveRDS(site_list, file=here("data_folder","raw",glue("mrip_sites_{vintage_string}.Rds")))
-
 
 
 

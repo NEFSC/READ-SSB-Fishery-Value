@@ -1,8 +1,12 @@
 library("ROracle")
 library("glue")
 library("tidyverse")
-
 library("here")
+library("conflicted")
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(lubridate::year)
+conflicts_prefer(dplyr::summarise)
+conflicts_prefer(dplyr::arrange)
 
 here::i_am("R_code/data_extraction_processing/extraction/fmp_value_datapull.R")
 
@@ -180,6 +184,21 @@ stock_area_definitions<-stock_area_definitions %>%
     itis_tsn %in% c("161702","161706","161703","161701","161731", "161732","161704") ~ "Unit", # ASMFC
     .default = area_name  )
   ) 
+
+
+# Cod does not quite have the correct boundaries.  See page 10 of the Amendment 25 to groundfish
+
+
+stock_area_definitions<-stock_area_definitions %>%
+  mutate(area_name2= case_when(
+    itis_tsn=="164712" & area %in% c("465", "467", "511","512") ~ "EGOM", #Eastern GOM 
+    itis_tsn=="164712" & area %in% c("513", "514", "515","521","526","541") ~ "WGOM", #Western GOM
+    itis_tsn=="164712" & area %in% c("464","522","525","542", "543","551","552","561","562") ~ "GB", #Western GOM
+    itis_tsn=="164712" & area %in% c("533", "534", "537","538","539","611","612","613","614","615","616","621","622","623","624",
+    "625","626","627","628","629","631","632","633","634","635","636","637","638","639","640") ~ "SNE", #Western GOM
+    .default = area_name2  )
+  ) 
+
 
 write_rds(stock_area_definitions, file=here("data_folder","main",glue("stock_area_definitions_{vintage_string}.Rds")))
 #write_csv(stock_area_definitions, file=here("data_folder","main",glue("stock_area_definitions_{vintage_string}.csv")))
