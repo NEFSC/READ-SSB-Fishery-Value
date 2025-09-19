@@ -224,7 +224,8 @@ site_list<-site_list %>%
 county_list<-site_list %>%
   group_by(state_code, county_code) %>%
   count(nmfs_stat_area)%>%
-  arrange(state_code, county_code, n) %>%
+  arrange(state_code, county_code, -n) %>%
+  slice(1) %>%
   select(state_code,county_code,nmfs_stat_area) %>%
   rename(nmfs_stat_areaC=nmfs_stat_area)
 
