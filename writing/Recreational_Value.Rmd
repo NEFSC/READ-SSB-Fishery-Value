@@ -36,7 +36,6 @@ options(survey.lonely.psu = "certainty")
 
 here::i_am("writing/Recreational_Value.Rmd")
 
-
 ```
 
 ```{r extract_data, eval=FALSE, include=FALSE}
@@ -220,14 +219,17 @@ site_list<-site_list %>%
     rename_with(tolower)%>%
   select(intsite,nmfs_stat_area, state_code, county_code)
 
-
+# for each county, pick the most common statistical area, in case there are intsite in the MRIP
+# data that do not appear in the site_list.
 county_list<-site_list %>%
   group_by(state_code, county_code) %>%
   count(nmfs_stat_area)%>%
   arrange(state_code, county_code, -n) %>%
   slice(1) %>%
   select(state_code,county_code,nmfs_stat_area) %>%
-  rename(nmfs_stat_areaC=nmfs_stat_area)
+  rename(nmfs_stat_areaC=nmfs_stat_area) %>%
+  ungroup()
+
 
 ```
 
@@ -284,18 +286,18 @@ Tripdata  <- Tripdata %>%
 
 
 
-
 ##############################################################
 # Keep rows that are among the species that we are interested in.  
 
 # make a vector of the itis names
 tsns<-fmp_listing %>%
-  select(itis_tsn,fmp,council) %>%
+  select(itis_tsn,fmp,council,itis_name, itis_sci_name) %>%
   mutate(in_fmp_keyfile=1)
 
 # Inner join to the keyfile to keep just the trips that are in the fmp listing 
+
 Tripdata  <- Tripdata %>% 
-  inner_join(tsns, by=join_by(tsn1==itis_tsn))
+  inner_join(tsns, by=join_by(tsn1==itis_tsn), relationship="many-to-one")
 
 ```
 
@@ -333,7 +335,7 @@ Tripdata<-Tripdata %>%
 REC_DATA<-Tripdata %>%
   left_join(stock_area_definitions, by=join_by(tsn1==itis_tsn, nmfs_stat_area==area), relationship="many-to-one")
 
-
+stopifnot(nrow(REC_DATA)==start_length)
 
 # This is code used to look at any species market as No Federal FMP 
 # test2<-REC_DATA %>%
@@ -477,7 +479,7 @@ Effortdesign <- svydesign(
 )
 ```
 
-```{r compute_trips, eval=FALSE}
+```{r compute_trips, eval=TRUE}
 # This takes a while, so set eval=TRUE only for the first time you run.
 # Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
 RecreationalTrips <- svyby(~dtrip, by=~year+st+tsn1+mode_fc+stockarea,
@@ -510,7 +512,7 @@ where $D_{i,t,s}$ is the total target trips, $a_{i,t}$ is the share of adults, $
 RecreationalTrips<-readRDS(file=here("data_folder","main",glue("RecreationalTrips_{vintage_string}.Rds")))
 
 RecreationalTrips <- RecreationalTrips %>%
-  left_join(impact.data0.2022.mod,by = join_by(st==statefp, mode_str==mode)) %>%
+  left_join(impact.data0.2022.mod,by = join_by(st==statefp, mode_str==mode), relationship="many-to-one") %>%
   mutate(
     # Multiply total number of trips by the adult percentage
     AdultTrips_maxyr = dtrip * adult_per ,
@@ -522,22 +524,36 @@ RecreationalTrips <- RecreationalTrips %>%
     ValueAdded_maxyr = m_va22 * TotalExpenditures_2022
     )
 
+RecreationalTrips<-RecreationalTrips %>%
+  rename(itis_tsn=tsn1) %>%
+  left_join(fmp_listing, by=join_by(itis_tsn==itis_tsn), relationship="many-to-one") %>%
+  relocate(council, fmp, itis_tsn, itis_sci_name, itis_name, stockarea, st, stateabb, statefp_string)%>%
+  arrange(council, fmp, itis_name,stockarea, year, st) %>%
+  rename(manager=council) %>%
+  select(-nespp3)
+
+
+saveRDS(RecreationalTrips, file=here("data_folder","main",glue("Disaggregated_Recreational_Trips_{rec_vintage_string}.Rds")))
+
+write.csv(x = RecreationalTrips, file=here("data_folder","main",glue("Disaggregated_Recreational_Trips_{rec_vintage_string}.csv")))
+
+
+
 ```
 
 
 ## Format the recreational data.
     
 ```{r save}	
-  # Compute value
+  # Aggregate to the year and stock level.
 Recreational_Expenditures<-RecreationalTrips %>%
-  group_by(year,tsn1,stockarea) %>%
+  group_by(year,itis_tsn,stockarea) %>%
   summarise(ValueAdded_maxyr=sum(ValueAdded_maxyr),
             trips=sum(dtrip))
 
 # Join to the 'stock' information, which contains info on the manager and des
 Recreational_Expenditures<-Recreational_Expenditures %>%
-  rename(itis_tsn=tsn1) %>%
-  left_join(fmp_listing, by=join_by(itis_tsn==itis_tsn)) %>%
+  left_join(fmp_listing, by=join_by(itis_tsn==itis_tsn), relationship="many-to-one") %>%
   relocate(council, fmp, itis_tsn, itis_sci_name, itis_name, stockarea)%>%
   arrange(council, fmp, itis_name,stockarea, year) %>%
   rename(manager=council) %>%
@@ -551,7 +567,6 @@ write.csv(x = Recreational_Expenditures, file=here("data_folder","main",glue("Re
 
 Recreational_Expenditures_NER<-Recreational_Expenditures %>%
   filter(is.na(manager)==0)
-
 
 saveRDS(Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_NERmanaged_{rec_vintage_string}.Rds")))
 
@@ -570,8 +585,7 @@ saveRDS(Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recr
 
 write.csv(x = Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_avg_NER_managed{rec_vintage_string}.csv")))
 
-
-
+# Print the tables
 Recreational_Expenditures_NER <- Recreational_Expenditures_NER %>%
   mutate(avg_ValueAdded_maxyr=dollar(avg_ValueAdded_maxyr, accuracy=1 )) %>%
   ungroup()
