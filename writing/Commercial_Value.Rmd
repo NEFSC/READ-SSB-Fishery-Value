@@ -7,14 +7,6 @@ output:
     df_print: paged
     keep_md: yes
     fig_caption: yes
-params:
-  finished_switch:
-    value: finished
-    choices:
-    - placeholder
-    - finished
-  deflate_year:
-    value: 2024
 
 ---
 
@@ -47,7 +39,7 @@ here::i_am("writing/Commercial_Value.Rmd")
 
 ```
 
-```{r extract_data, eval=FALSE, include=FALSE}
+```{r extract_data, eval=FALSE, include=TRUE}
 
 #Some of the data prep takes a long time. 
 #Instead of pulling data every time I want to compile this doc, I have split off the code to do so into the following pieces.
@@ -80,7 +72,7 @@ non_NEM_landings<-readRDS(file=here("data_folder","main",glue("Other_species_lan
 deflators<-readRDS(file=here("data_folder","raw",glue("deflators_{vintage_string}.Rds")))
 ```
 
-```{r process_deflators, include=FALSE}
+```{r process_deflators, include=FALSE, eval=FALSE}
 
 deflate_base<-deflators %>%
   filter(year==params$deflate_year)%>%
@@ -234,9 +226,9 @@ Commercial_Value<-CAMS_revenue %>%
   pivot_wider(names_from=year, values_from=commercial_value) %>%
   relocate(council, fmp, itis_tsn, itis_sci_name, itis_name, stockarea)
 
-saveRDS(Commercial_Value, file=here("data_folder","main",glue("Commercial_Value_{params$finished_switch}_{vintage_string}.Rds")))
+saveRDS(Commercial_Value, file=here("data_folder","main",glue("Commercial_Value_{vintage_string}.Rds")))
 
-write.csv(x = Commercial_Value, file=here("data_folder","main",glue("Commercial_Value_{params$finished_switch}_{vintage_string}.csv")))
+write.csv(x = Commercial_Value, file=here("data_folder","main",glue("Commercial_Value_{vintage_string}.csv")))
 
 ```
 
