@@ -1,8 +1,12 @@
 library("ROracle")
 library("glue")
 library("tidyverse")
-
 library("here")
+library("conflicted")
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(lubridate::year)
+conflicts_prefer(dplyr::summarise)
+conflicts_prefer(dplyr::arrange)
 
 here::i_am("R_code/data_extraction_processing/extraction/fmp_value_datapull.R")
 
