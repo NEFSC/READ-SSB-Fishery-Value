@@ -27,8 +27,8 @@ output:
 #  - data_folder/external/national_state2020.txt            (Census state FIPS crosswalk)
 #
 # Outputs:
-#  - data_folder/main/REC_DATA_{vintage}.Rds
-#  - data_folder/main/RecreationalTrips_{vintage}.Rds
+#  - data_folder/main/REC_DATA_{rec_vintage}.Rds
+#  - data_folder/main/RecreationalTrips_{rec_vintage}.Rds
 #  - data_folder/main/Disaggregated_Recreational_Trips_{rec_vintage}.Rds / .csv
 #  - data_folder/main/Recreational_Expenditures_{rec_vintage}.Rds / .csv
 #  - data_folder/main/Recreational_Expenditures_NERmanaged_{rec_vintage}.Rds / .csv
@@ -93,11 +93,14 @@ source(here("R_code", "data_extraction_processing", "extraction","MRIP_Data_Extr
 
 ```{r readin_data, include=FALSE}
 # Two independent vintage strings are in play here:
-#   vintage_string     - the COMMERCIAL datapull's date, recovered from data_folder/main
-#   rec_vintage_string - the MRIP site pull's date, recovered from data_folder/raw
+#   vintage_string     - the COMMERCIAL datapull's date, recovered from data_folder/main.
+#                        Used only to read the three commercial-side inputs below.
+#   rec_vintage_string - the MRIP site pull's date, recovered from data_folder/raw.
+#                        Used to read the MRIP inputs and to stamp every output this
+#                        document writes.
 # They are equal whenever all extraction is run on one day, which is the intended
-# workflow. They are not guaranteed equal, and the outputs below are stamped with a
-# mix of the two -- see ISSUES.md #3.
+# workflow, but nothing enforces that -- so read with the string that matches where
+# the file came from.
 vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("species_area_landings_*Rds"))
 vintage_string<-gsub("species_area_landings_","",vintage_string)
 vintage_string<-gsub(".Rds","",vintage_string)
@@ -642,7 +645,7 @@ write.csv(x = Recreational_Expenditures_NER, file=here("data_folder","main",glue
 
 
 # Average over the 2018-2024 time period. Excuse the hard coded 7.
-# BUG (see ISSUES.md #4): the 7 is the number of years in the read_and_prepTripdata
+# BUG (see ISSUES.md #1): the 7 is the number of years in the read_and_prepTripdata
 # filter (2018-2024). Nothing ties the two together, so widening or narrowing that
 # year range silently produces a wrong average here.
 
