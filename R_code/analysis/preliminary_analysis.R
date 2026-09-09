@@ -24,7 +24,7 @@ library("here")
 library("writexl")
 library("readxl")
 
-here::i_am("R_code/data_extraction_processing/extraction/preliminary_analysis.R")
+here::i_am("R_code/analysis/preliminary_analysis.R")
 
 
 # hardcoded
