@@ -42,9 +42,16 @@ conflicts_prefer(dplyr::select)
 vintage_string<-format(Sys.Date())
 
 #Current year is not complete nor final, so should be dropped
-# BUG (see ISSUES.md #5): hard-coded to 2025. 
-
+# Set this to the first year whose data should NOT be used. It stays an explicit
+# constant because "final" is set by MRIP's release schedule, not by the calendar --
+# deriving it from Sys.Date() would start admitting a year the moment it ended,
+# before MRIP has finalized it.
 Incomplete_year=2025
+
+# The file globs below match any 202? year, so a stale Incomplete_year silently
+# lets partial data into the estimates. Fail loudly instead: once the calendar
+# passes this constant, someone has to look at the MRIP release and bump it.
+stopifnot(Incomplete_year >= as.numeric(format(Sys.Date(), "%Y")))
 
 #File paths are set up for container, so ITD needs to map appropriately.
 
