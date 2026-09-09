@@ -1,3 +1,29 @@
+###############################################################################
+# Purpose: 	Tidy up ITIS codes and council labels on a commercial landings file,
+#           deflate value to a base year, and write species-level and FMP-level
+#           real value tables to Excel.
+#
+# Inputs:
+#  - data_folder/main/fmp_landings_{vintage}.Rds  (no longer produced -- see Notes)
+#  - data_folder/main/deflators_{vintage}.Rds     (see Notes)
+#
+# Outputs:
+#  - data_folder/main/northeast_species_value_{vintage}.xlsx
+#  - data_folder/main/northeast_fmp_value_{vintage}.xlsx
+#
+# Execution order
+# SUPERSEDED. Not part of the production pipeline and not sourced by anything.
+# This is an ancestor of what writing/Commercial_Value.Rmd now does.
+#
+# Notes
+# THIS FILE IS SUPERSEDED AND HAS NOT BEEN AUDITED FOR CORRECTNESS. It cannot run
+# as written
+#
+# Worth knowing if you are comparing outputs: unlike the current pipeline, this
+# version deflated value and collapsed ASMFC/NEFMC to NEFMC.  In production, the commercial value is
+# reported nominal today, and I think the joint council label is retained.
+###############################################################################
+
 library("ROracle")
 library("glue")
 library("tidyverse")

@@ -10,6 +10,47 @@ output:
 ---
 
 ```{r setup, include=FALSE}
+###############################################################################
+# Purpose: 	Assemble gross recreational expenditures and value-added by stock and
+#           year. Assigns MRIP trips to stock areas, estimates directed trips with
+#           the MRIP survey design, and applies per-trip expenditures and
+#           value-added multipliers.
+#
+# Inputs:
+#  - data_folder/main/stock_area_definitions_{vintage}.Rds  (fmp_value_datapull.R)
+#  - data_folder/main/fmp_listing_{vintage}.Rds             (fmp_value_datapull.R)
+#  - data_folder/main/stock_keyfile_{vintage}.Rds           (Commercial_Value.Rmd)
+#  - data_folder/raw/mrip_sites_{rec_vintage}.Rds           (MRIP_Sites.R)
+#  - data_folder/raw/rectrip_{rec_vintage}.Rds              (MRIP_Data_Extraction.R)
+#  - data_folder/external/Trip_Exp_Imp_2022survey.csv       (external, see Notes)
+#  - data_folder/external/trip_impacts_multipliers_2022.csv (external, see Notes)
+#  - data_folder/external/national_state2020.txt            (Census state FIPS crosswalk)
+#
+# Outputs:
+#  - data_folder/main/REC_DATA_{rec_vintage}.Rds
+#  - data_folder/main/RecreationalTrips_{rec_vintage}.Rds
+#  - data_folder/main/Disaggregated_Recreational_Trips_{rec_vintage}.Rds / .csv
+#  - data_folder/main/Recreational_Expenditures_{rec_vintage}.Rds / .csv
+#  - data_folder/main/Recreational_Expenditures_NERmanaged_{rec_vintage}.Rds / .csv
+#  - data_folder/main/Recreational_Expenditures_avg_NER_managed{rec_vintage}.Rds / .csv
+#  - the knit HTML document and, via keep_md, its markdown
+#
+# Execution order
+# Stage 4 of the production pipeline, and the last step. Sources MRIP_Sites.R and
+# MRIP_Data_Extraction.R from the `extract_data` chunk below. Nothing calls this
+# document -- it is knit by hand.
+#
+# writing/Commercial_Value.Rmd MUST BE KNIT FIRST. This document reads
+# stock_keyfile_{vintage}.Rds, which only that document produces. Nothing enforces
+# the ordering; knitting this one first on a clean data folder fails at the
+# stock_keyfile read with a missing-file error whose cause is not obvious.
+#
+# Notes
+# The two 2022 expenditure/multiplier CSVs are external to this repository by
+# design and are gitignored. A fresh clone will not have them and cannot knit this
+# document until they are placed in data_folder/external.
+###############################################################################
+
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 knitr::opts_chunk$set(comment = FALSE)
@@ -44,13 +85,22 @@ here::i_am("writing/Recreational_Value.Rmd")
 #Instead of pulling data every time I want to compile this doc, I have split off the code to do so into the following pieces.
 
 # Get MRIP sites
-source(here("R_code", "data_extraction_processing", "extraction","MRIP_sites.R"))
+source(here("R_code", "data_extraction_processing", "extraction","MRIP_Sites.R"))
 
 # Get MRIP catch and effort data
 source(here("R_code", "data_extraction_processing", "extraction","MRIP_Data_Extraction.R"))
 ```
 
 ```{r readin_data, include=FALSE}
+# Two independent vintage strings are in play here:
+#   vintage_string     - the COMMERCIAL datapull's date, recovered from data_folder/main.
+#                        Used only to read the three commercial-side inputs below.
+#   rec_vintage_string - the MRIP site pull's date, recovered from data_folder/raw.
+#                        Used to read the MRIP inputs and to stamp every output this
+#                        document writes.
+# They are equal whenever all extraction is run on one day, which is the intended
+# workflow, but nothing enforces that -- so read with the string that matches where
+# the file came from.
 vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("species_area_landings_*Rds"))
 vintage_string<-gsub("species_area_landings_","",vintage_string)
 vintage_string<-gsub(".Rds","",vintage_string)
@@ -76,6 +126,9 @@ site_list<-readRDS(file=here("data_folder","raw",glue("mrip_sites_{rec_vintage_s
 Tripdata<-readRDS(file=here("data_folder","raw",glue("rectrip_{rec_vintage_string}.Rds")))
 
 # Read in Trip Expenditure data
+# The next two CSVs are external to this repository and gitignored. They come from
+# the 2022 national saltwater angler expenditure survey and its impact multipliers;
+# obtain them and drop them in data_folder/external before knitting.
 impact.data0.2022=read.csv(here("data_folder","external","Trip_Exp_Imp_2022survey.csv")) %>%
   mutate(State=trimws(State))%>%
   rename(mode=MODE, 
@@ -83,6 +136,9 @@ impact.data0.2022=read.csv(here("data_folder","external","Trip_Exp_Imp_2022surve
 
 
 # Read in Value Add multipliers
+# Drop the "Total Trip" row, which is an all-modes summary rather than a mode, and
+# keep the national multipliers: value-added is computed at the US level even though
+# expenditures vary by state and mode.
 impact.data0.2022.1=read.csv(here("data_folder","external","trip_impacts_multipliers_2022.csv")) %>%
   rename(mode = Mode) %>%
   filter(mode != "Total Trip",state3=="United States") %>%
@@ -187,7 +243,7 @@ impact.data0.2022.mod <- impact.data0.2022.mod %>%
 stopifnot(nrow(impact.data0.2022)==nrow(impact.data0.2022.mod))
 
   
-mid_atlantic<-c("RI","CT","NY","NJ","PA","DE","DC","VA","MD","NC")
+mid_atlantic<-c("CT","NY","NJ","PA","DE","DC","VA","MD","NC")
 new_england<-c("ME","NH","MA","RI","VT")
 my_states<-c(new_england,mid_atlantic)
 
@@ -246,17 +302,30 @@ The trip data is "all" MRIP data, so we need to do a few things before we can co
 ```{r read_and_prepTripdata}
 
 # 2018-2024 or later
-Tripdata  <- Tripdata %>% 
-  filter(year>=2018 & year<=2024) 
+# The analysis window. n_years is derived rather than typed again, because the
+# multi-year average at the end of this document divides by the width of this
+# window. Change the window here and the average follows.
+first_year <- 2018
+last_year  <- 2024
+n_years    <- last_year - first_year + 1
+
+Tripdata  <- Tripdata %>%
+  filter(year>=first_year & year<=last_year)
 
 # Northeast, Mid-Atlantic, or North Carolina
+# NC (FIPS 37) sits in the South Atlantic sub-region, so it has to be named
+# explicitly to be pulled into the Northeast Region footprint.
 Tripdata <- Tripdata %>% 
   filter(sub_reg %in% c(4,5) | st==37) 
 
 # fix the var_id
 # create a binned mode that aggregates the for-hire together
 # keep just some of the columns that I need.
-Tripdata <- Tripdata %>% 
+# var_id is the strata variable for the survey design below; MRIP leaves it blank
+# on some records, and svydesign will not accept an empty stratum, so fall back to
+# strat_id. Modes 5 (party) and 6 (charter) collapse into 4 (for-hire) because the
+# expenditure survey reports a single for-hire figure.
+Tripdata <- Tripdata %>%
   mutate(var_id = ifelse(var_id=="",strat_id,var_id),
          mode_fc = mode_fx,
          mode_fc= ifelse(mode_fc%in%c("5","6"),"4",mode_fc)) %>% # 3=shore, 4=for-hire, 7=private boat
@@ -391,6 +460,9 @@ REC_DATA<-REC_DATA %>%
 #   filter(missing==FALSE & target_common=="BLACK SEA BASS")
 
 #Black sea bass
+# Black sea bass is split NORTH/SOUTH, but the site list cannot resolve which side
+# a trip belongs to when the intsite is missing. Assign by state, and for NJ (34) by
+# county, because the stock boundary runs through the state rather than around it.
 REC_DATA<-REC_DATA %>%
   mutate(stockarea = case_when(
     tsn1==167687 & st %in% c(9,25,33,44) & is.na(stockarea)~ "NORTH",
@@ -451,7 +523,7 @@ problems<-test3 %>%
   filter(count>1)
 
 stopifnot(nrow(problems)==0)
-saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{vintage_string}.Rds")))
+saveRDS(REC_DATA, file=here("data_folder","main",glue("REC_DATA_{rec_vintage_string}.Rds")))
 ```
 
 That was the last data cleaning step.
@@ -469,7 +541,11 @@ REC_DATA<-REC_DATA %>%
                         labels=c("Shore","For-Hire","Private Boat"))
   )
          # construct the object that describes the survey design.
-
+# MRIP is a stratified cluster design; ids/strata/weights are the standard MRIP
+# trip-level specification. nest=TRUE because PSU ids are only unique within a
+# stratum. options(survey.lonely.psu="certainty") is set in the setup chunk, which
+# treats single-PSU strata as contributing no variance rather than erroring -- these
+# turn up routinely once trips are cut this finely by stock and mode.
 Effortdesign <- svydesign(
   ids = ~psu_id, 
   strata = ~var_id, # Specify the strata variable
@@ -481,6 +557,9 @@ Effortdesign <- svydesign(
 
 ```{r compute_trips, eval=TRUE}
 # This takes a while, so set eval=TRUE only for the first time you run.
+# (The chunk is currently set eval=TRUE, so svyby is re-run on every knit. The
+# result is saved below and re-read in the next chunk, so flipping this to FALSE
+# after a first pass still leaves the document knittable.)
 # Compute total trips targeting a stock by mode. I'm keeping mode because expenditures vary by mode. 
 RecreationalTrips <- svyby(~dtrip, by=~year+st+tsn1+mode_fc+stockarea,
                      svytotal,
@@ -492,8 +571,7 @@ RecreationalTrips<-RecreationalTrips %>%
          se = ceiling(se),
          mode_str= as.character(mode_fc)
 )
-
-saveRDS(RecreationalTrips, file=here("data_folder","main",glue("RecreationalTrips_{vintage_string}.Rds")))
+saveRDS(RecreationalTrips, file=here("data_folder","main",glue("RecreationalTrips_{rec_vintage_string}.Rds")))
 
 ```
 
@@ -509,7 +587,7 @@ where $D_{i,t,s}$ is the total target trips, $a_{i,t}$ is the share of adults, $
 
 
 ```{r compute_rec_expenses}
-RecreationalTrips<-readRDS(file=here("data_folder","main",glue("RecreationalTrips_{vintage_string}.Rds")))
+RecreationalTrips<-readRDS(file=here("data_folder","main",glue("RecreationalTrips_{rec_vintage_string}.Rds")))
 
 RecreationalTrips <- RecreationalTrips %>%
   left_join(impact.data0.2022.mod,by = join_by(st==statefp, mode_str==mode), relationship="many-to-one") %>%
@@ -573,12 +651,15 @@ saveRDS(Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recr
 write.csv(x = Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_NERmanaged_{rec_vintage_string}.csv")))
 
 
-# Average over the 2018-2024 time period. Excuse the hard coded 7.
+# Average over the analysis window set in the read_and_prepTripdata chunk.
+# The divisor is the width of that window, not the number of years a stock actually
+# turns up in: a stock that saw no trips in some year should average toward zero
+# rather than be rescaled as though that year had not happened.
 
 Recreational_Expenditures_NER<-Recreational_Expenditures_NER %>%
   group_by(manager, fmp, itis_tsn, itis_sci_name, itis_name, stockarea) %>%
-  summarise(avg_ValueAdded_maxyr=sum(ValueAdded_maxyr)/7,
-            trips=sum(trips)/7)
+  summarise(avg_ValueAdded_maxyr=sum(ValueAdded_maxyr)/n_years,
+            trips=sum(trips)/n_years)
 
 
 saveRDS(Recreational_Expenditures_NER, file=here("data_folder","main",glue("Recreational_Expenditures_avg_NER_managed{rec_vintage_string}.Rds")))
@@ -594,7 +675,7 @@ Recreational_Expenditures_NER <- Recreational_Expenditures_NER %>%
  knitr::kable(Recreational_Expenditures_NER  %>%
     select(-c(itis_tsn, itis_sci_name)),
     col.names = c("Manager","FMP","Species Name","Stock","Value-Added","Trips"),
-    caption='Average Value-Added and Trips 2018-2024',format.args = list(big.mark = ","), digits=0, align=c("l", "l","l","l","r","r") ) 
+    caption=glue('Average Value-Added and Trips {first_year}-{last_year}'),format.args = list(big.mark = ","), digits=0, align=c("l", "l","l","l","r","r") )
 
 
 

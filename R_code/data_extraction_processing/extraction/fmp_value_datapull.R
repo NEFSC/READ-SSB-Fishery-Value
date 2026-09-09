@@ -1,3 +1,37 @@
+###############################################################################
+# Purpose: 	Pull commercial landings and value out of CAMS, along with the species
+#           /FMP/council listing and the statistical-area-to-stock crosswalk, and
+#           save each as a dated ("vintage") Rds file. Also patches the stock area
+#           definitions where CAMS does not carry the correct boundaries.
+#
+# Inputs:
+#  - Oracle (nefscusers): cams_garfo.cfg_itis, cams_garfo.cams_land,
+#    cams_garfo.cfg_statarea_stock
+#  - Connection objects id, novapw, and nefscusers.connect.string, expected to
+#    already exist in the global environment from the user's .Rprofile.
+#    See R_code/project_logistics/R_and_keyring.R.
+#
+# Outputs:
+#  - data_folder/main/fmp_listing_{Sys.Date()}.Rds
+#  - data_folder/main/species_area_landings_{Sys.Date()}.Rds
+#  - data_folder/main/Other_species_landings_{Sys.Date()}.Rds
+#  - data_folder/main/stock_area_definitions_{Sys.Date()}.Rds
+#
+# Execution order
+# Stage 1 of the production pipeline. Sourced by writing/Commercial_Value.Rmd
+# (chunk `extract_data`, eval=FALSE) alongside FRED_extraction.R. Calls nothing.
+#
+# Notes
+# This script's output date is THE vintage for the whole pipeline. Both Rmd files
+# derive `vintage_string` by globbing for species_area_landings_*.Rds and taking
+# the max, so everything else has to be stamped with the same day to be found.
+#
+# cams_garfo.cfg_statarea_stock does not contain every stock definition. The
+# case_when blocks near the bottom fill the gaps: unit stocks were confirmed
+# against STOCKEFF, and anything absent from STOCKEFF was resolved from the stock
+# assessment and the relevant FMP documents.
+###############################################################################
+
 library("ROracle")
 library("glue")
 library("tidyverse")
@@ -12,6 +46,8 @@ here::i_am("R_code/data_extraction_processing/extraction/fmp_value_datapull.R")
 
 vintage_string<-format(Sys.Date())
 
+# Landings window for the assessment. year_end trails the current year because the
+# most recent year of CAMS landings is not final.
 year_start<-2004
 year_end<-2024
 
@@ -24,6 +60,12 @@ year_end<-2024
 drv<-dbDriver("Oracle")
 nova_conn<-dbConnect(drv, id, password=novapw, dbname=nefscusers.connect.string)
 
+
+# A NULL council in cfg_itis is the marker for "no council manages this species" --
+# state-managed stocks, HMS, SERO, and unmanaged species all land here. That single
+# null/not-null split is what separates the two listings and the two landings
+# queries below, and it is why the non-managed landings are not broken out by
+# statistical area: without a council there is no stock area to allocate them to.
 
 # Query to pull out the FMPs and corresponding species
 fmp_query<-glue("select itis_tsn, itis_sci_name, itis_name, dlr_nespp3 as nespp3, fmp, council from cams_garfo.cfg_itis 
@@ -83,6 +125,8 @@ dbDisconnect(nova_conn)
 ################################################################################
 # Fix council, rename to lower
 
+# cfg_itis spells the joint council both ways. Collapse to one form, because
+# downstream filters in the Rmd files match on the literal string "MAFMC/NEFMC".
 fmp_listing <-fmp_listing %>%
   mutate(COUNCIL = ifelse(COUNCIL == "NEFMC/MAFMC", "MAFMC/NEFMC", COUNCIL))
 fmp_listing <- fmp_listing %>%
@@ -170,9 +214,14 @@ stock_area_definitions <- stock_area_definitions %>%
 
 
 
+# Stocks that cfg_statarea_stock either splits by area or leaves undefined, but
+# which are managed as single units. Confirmed against STOCKEFF; anything not in
+# STOCKEFF was resolved from the assessment and FMP documents. Comparison is on the
+# literal ITIS TSN string, so leading/trailing whitespace here silently fails to
+# match and leaves the stock carrying its raw area_name instead of "Unit".
 stock_area_definitions<-stock_area_definitions %>%
   mutate(area_name2= case_when(
-    itis_tsn %in% c("172567", "172877", "172735"," 172873" , "172933" , "166774" 
+    itis_tsn %in% c("172567", "172877", "172735","172873" , "172933" , "166774" 
                     , "164727" , "630979" , "169182" , "171341" , "168559" , "172413" ,
                     "080944" , "172414" , "081343" , "082372" , "082521" , "168543" ,
                     "168546" , "160617" , "164732" , "161722") ~ "Unit",
