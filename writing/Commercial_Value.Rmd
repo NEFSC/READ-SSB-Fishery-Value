@@ -11,6 +11,46 @@ output:
 ---
 
 ```{r setup, include=FALSE}
+###############################################################################
+# Purpose: 	Assemble gross commercial revenue by stock and year. Aggregates CAMS
+#           landings and value from the species/statistical-area level up to the
+#           stock level, folds in non-Northeast-managed species, and writes the
+#           commercial deliverable plus the stock keyfile.
+#
+# Inputs:
+#  - data_folder/main/species_area_landings_{vintage}.Rds   (fmp_value_datapull.R)
+#  - data_folder/main/stock_area_definitions_{vintage}.Rds  (fmp_value_datapull.R)
+#  - data_folder/main/fmp_listing_{vintage}.Rds             (fmp_value_datapull.R)
+#  - data_folder/main/Other_species_landings_{vintage}.Rds  (fmp_value_datapull.R)
+#  - data_folder/raw/deflators_{vintage}.Rds                (FRED_extraction.R; unused, see Notes)
+#
+# Outputs:
+#  - data_folder/main/stock_keyfile_{vintage}.Rds
+#  - data_folder/main/Commercial_Value_{vintage}.Rds
+#  - data_folder/main/Commercial_Value_{vintage}.csv
+#  - the knit HTML document and, via keep_md, its markdown
+#
+# Execution order
+# Stage 2 of the production pipeline, and the first of the two documents.
+# Sources FRED_extraction.R and fmp_value_datapull.R from the `extract_data` chunk
+# below. Nothing calls this document -- it is knit by hand.
+#
+# THIS DOCUMENT MUST BE KNIT BEFORE writing/Recreational_Value.Rmd. It is the sole
+# producer of stock_keyfile_{vintage}.Rds, which that document reads. Knitting them
+# in the other order on a clean data folder fails with a missing-file error whose
+# cause is not obvious.
+#
+# Notes
+# Commercial value is reported in NOMINAL dollars, by design. The deflators are
+# read in below and the `process_deflators` chunk is deliberately dormant; neither
+# is an oversight or unfinished work.
+#
+# The extraction scripts are sourced from a chunk marked eval=FALSE. That is a
+# runtime convenience, not a sign the step is optional -- pulling from CAMS is slow,
+# so the extract is run once and the document is then knit against the saved
+# vintage as many times as needed. See REPO-STATUS.md.
+###############################################################################
+
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 knitr::opts_chunk$set(comment = FALSE)
@@ -52,6 +92,11 @@ source(here("R_code", "data_extraction_processing", "extraction","fmp_value_data
 ```
 
 ```{r readin_data, include=FALSE}
+# There is no vintage global. Each extraction script stamps its output with the
+# date it ran, and the vintage for the whole pipeline is recovered here by globbing
+# for the commercial landings file and taking the newest date string. Everything
+# else read below is looked up with that same string, which is why the extraction
+# scripts all have to be run on the same calendar day.
 vintage_string<-list.files(here("data_folder","main"), pattern=glob2rx("species_area_landings_*Rds"))
 vintage_string<-gsub("species_area_landings_","",vintage_string)
 vintage_string<-gsub(".Rds","",vintage_string)
@@ -69,10 +114,18 @@ non_NEM_landings<-readRDS(file=here("data_folder","main",glue("Other_species_lan
 
 
 # Read in Deflators
+# Read but never used: commercial value is reported nominal by design. Note this is
+# the one input that lives in data_folder/raw rather than main, and it is looked up
+# with the vintage discovered from the commercial landings file above, not from its
+# own filename -- so FRED_extraction.R has to have run the same day.
 deflators<-readRDS(file=here("data_folder","raw",glue("deflators_{vintage_string}.Rds")))
 ```
 
 ```{r process_deflators, include=FALSE, eval=FALSE}
+# Dormant by design -- commercial value is not deflated. Unlike the extract_data
+# chunk above, this one is not merely skipped for speed: it is retained as a record
+# of how deflation would be applied if it were ever wanted. As written it would not
+# run, because params$deflate_year has no corresponding params: block in the YAML.
 
 deflate_base<-deflators %>%
   filter(year==params$deflate_year)%>%
@@ -97,7 +150,9 @@ Gross revenues aggregated to the species and statistical area were extracted fro
 
 # Pull in stock area definitions.  Drop out landings from Canada or the 700s.
 
-
+# The join happens on area as a character string, matching how both tables carry it
+# out of Oracle; the numeric coercion is deferred until after the join so the
+# statistical-area filter below can be written as numbers.
 CAMS_revenue<-CAMS_revenue %>%
   left_join(stock_area_definitions, by=join_by(itis_tsn==itis_tsn, area==area))%>%
   mutate(area=as.numeric(area))%>%
@@ -113,6 +168,10 @@ CAMS_revenue<-CAMS_revenue %>%
 #table(CAMS_revenue$itis_name, CAMS_revenue$missing)
 
 # Some do not have a definition. Classify those as unit stocks
+# Two spellings arrive here: unmatched rows get "UNIT" from the line below, while
+# rows that matched carry the "Unit" written by the case_when blocks in
+# fmp_value_datapull.R. The second mutate collapses them so the group_by that
+# follows does not split one stock into two.
 CAMS_revenue<-CAMS_revenue %>%
   mutate(stockarea=if_else(is.na(stockarea),"UNIT",stockarea))%>%
   mutate(stockarea=if_else(stockarea=="Unit","UNIT",stockarea)) %>%
@@ -131,6 +190,8 @@ CAMS_revenue<-CAMS_revenue%>%
   ungroup()
 
 
+# Species with no council have no stock-area definitions to allocate against, so
+# they come out of Oracle aggregated to year only and are carried as unit stocks.
 non_NEM_landings<-non_NEM_landings %>%
   select(council, itis_name, itis_tsn, itis_sci_name, fmp, year, value, landings) %>%
     group_by(council, itis_name, itis_tsn, itis_sci_name, fmp, year) %>%
@@ -159,6 +220,8 @@ stock_keyfile<-CAMS_revenue %>%
   ungroup() %>%
   arrange(council, fmp, itis_tsn, itis_name, itis_sci_name, stockarea)
 
+# writing/Recreational_Value.Rmd reads this file. It is the only reason the two
+# documents have to be knit in order, and nothing enforces that ordering.
 saveRDS(stock_keyfile, file=here("data_folder","main",glue("stock_keyfile_{vintage_string}.Rds")))
 
 

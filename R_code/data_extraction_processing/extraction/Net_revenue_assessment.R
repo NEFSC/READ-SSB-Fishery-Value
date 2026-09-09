@@ -1,3 +1,25 @@
+###############################################################################
+# Purpose: 	Pull CAMS trip-level gross revenue, join it to commercial trip cost
+#           estimates, deflate both, and produce a trip-level net revenue dataset.
+#
+# Inputs:
+#  - Oracle (nefscusers): CAMS_LAND, CAMS_SUBTRIP
+#  - //nefscdata/Trip_Costs/Trip_Cost_Estimates/... (two multi-sheet xlsx workbooks)
+#  - data_folder/main/deflators_{vintage}.Rds  (see caveat below)
+#
+# Outputs:
+#  - data_folder/main/net_revenue_data_{Sys.Date()}.Rds
+#
+# Execution order
+# ABANDONED. Not part of the production pipeline and not sourced by anything. Its
+# wrapper document, writing/Net_revenue_assessment.Rmd, has been deleted. The only
+# consumer of its output is R_code/analysis/preliminary_analysis.R, which is itself
+# exploratory. 
+#
+# Notes
+# THIS FILE IS ABANDONED AND HAS NOT BEEN AUDITED FOR CORRECTNESS. 
+###############################################################################
+
 # Code to pull Gross Revenues, Trip Costs, and Deflators, to assess Net Revenue 
 # Initially from Geret DePiper, February 11, 2025
 

@@ -1,3 +1,33 @@
+###############################################################################
+# Purpose: 	Read the public MRIP trip and catch SAS files off the shared drive,
+#           stack them into single objects, and save each as a dated ("vintage")
+#           Rds file.
+#
+# Inputs:
+#  - trip_*.sas7bdat and catch_*.sas7bdat under
+#    /home/mlee/mrfss/products/mrip_estim/Public_data_cal2018
+#    (a container path -- see Notes)
+#
+# Outputs:
+#  - data_folder/raw/rectrip_{Sys.Date()}.Rds
+#  - data_folder/raw/reccatch_{Sys.Date()}.Rds
+#
+# Execution order
+# Stage 3 of the production pipeline. Sourced by writing/Recreational_Value.Rmd
+# (chunk `extract_data`, eval=FALSE) alongside MRIP_Sites.R. Calls nothing.
+#
+# Notes
+# Only the trip data is consumed downstream. The catch extract is staged for
+# future work -- see the comment above the catch section.
+#
+# Must be run on the same calendar day as MRIP_Sites.R: Recreational_Value.Rmd
+# discovers one vintage string from the site-list file and uses it to read the
+# trip file written here.
+#
+# Reading the SAS files is the slow step that motivated splitting extraction out
+# of the Rmd into separate sourced scripts in the first place.
+###############################################################################
+
 library(here)
 library(haven)
 library(plyr)
@@ -12,6 +42,8 @@ conflicts_prefer(dplyr::select)
 vintage_string<-format(Sys.Date())
 
 #Current year is not complete nor final, so should be dropped
+# BUG (see ISSUES.md #5): hard-coded to 2025. 
+
 Incomplete_year=2025
 
 #File paths are set up for container, so ITD needs to map appropriately.
@@ -88,7 +120,10 @@ saveRDS(Tripdata, file=here("data_folder","raw",glue("rectrip_{vintage_string}.R
 # Read in Catch data and save it to an Rds
 #################################################################################
 #################################################################################
-# 
+# NOTE: nothing in the current pipeline reads reccatch_*.Rds. This extract is
+# staged for future work. It is roughly half the runtime of this script, so if you
+# are waiting on a re-extraction and do not need catch, this is the part to skip.
+#
 
 filelist1 <- list.files(file.path(mrip_location), 
                         pattern=glob2rx("catch_2018?.sas7bdat"),

@@ -1,3 +1,25 @@
+###############################################################################
+# Purpose: 	Define project directory variables and locate a Stata executable, so
+#           that paths can be referred to by name rather than typed out.
+#
+# Inputs:
+#  - none (the repository's own folder layout, via here::i_am)
+#
+# Outputs:
+#  - none written to disk. Defines path variables and `stataexe` in the calling
+#    environment.
+#
+# Execution order
+# Not part of the production pipeline. No .R or .Rmd file in this repository
+# sources it; the production code calls here() directly instead. README.md points
+# users at it, but that README is stale scaffold text. See REPO-STATUS.md.
+#
+# Notes
+# The stata_* path variables and the Stata executable search are inherited from the
+# project template. Nothing in this project runs Stata -- see the Stata section of
+# REPO-STATUS.md.
+###############################################################################
+
 #Install packages if necessary
 if(!require(here)) {  
   install.packages("here")

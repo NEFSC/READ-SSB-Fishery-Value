@@ -1,3 +1,33 @@
+###############################################################################
+# Purpose: 	Document how to store Oracle credentials and API keys in the Windows
+#           credential store, and how to retrieve them into an R session. This is a
+#           how-to written as runnable snippets, not a script to be run start to
+#           finish.
+#
+# Inputs:
+#  - user-entered credentials, typed into the keyring dialog boxes
+#
+# Outputs:
+#  - entries in the Windows Credential Manager
+#  - the boilerplate that belongs in the user's .Rprofile / .Renviron
+#
+# Execution order
+# Not part of the production pipeline, and not sourced by anything. Run the Step 0
+# and Step 1 blocks once per machine; copy the "read-in example" blocks into your
+# .Rprofile.
+#
+# Notes
+# DO NOT source() this file. It calls install.packages() and opens interactive
+# key_set() dialogs at top level, and the sample-code blocks would fire real Oracle
+# and FRED queries.
+#
+# The pipeline depends on this file's CONTENT having been installed into the user's
+# .Rprofile. fmp_value_datapull.R, MRIP_Sites.R and Net_revenue_assessment.R all
+# reference id, novapw and nefscusers.connect.string without defining them; read-in
+# example 1 below is where those come from. Likewise FRED_extraction.R expects
+# FRED_API_KEY, which read-in example 2 sets.
+###############################################################################
+
 # This file describes how to store something in a secure keyring and then retrieve it in R. 
 # It has been tested using Windows 10 and R 4.4.2
 # Step 0: install the keyring package in R

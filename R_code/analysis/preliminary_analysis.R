@@ -1,3 +1,22 @@
+###############################################################################
+# Purpose: 	Interactive exploration of the trip-level net revenue data: how much
+#           revenue has matched cost data, and net revenue by year.
+#
+# Inputs:
+#  - data_folder/main/net_revenue_data_{vintage}.Rds  (Net_revenue_assessment.R)
+#
+# Outputs:
+#  - none written to disk. Two ggplot objects drawn to the active device.
+#
+# Execution order
+# EXPLORATORY / ABANDONED. Not part of the production pipeline and not sourced by
+# anything. Its only input comes from Net_revenue_assessment.R, which is itself
+# abandoned and does not run as written.
+#
+# Notes
+# THIS FILE IS ABANDONED AND HAS NOT BEEN AUDITED FOR CORRECTNESS. 
+###############################################################################
+
 # Explorations
 library("glue")
 library("tidyverse")
@@ -5,7 +24,7 @@ library("here")
 library("writexl")
 library("readxl")
 
-here::i_am("R_code/data_extraction_processing/extraction/Net_revenue_assessment.R")
+here::i_am("R_code/data_extraction_processing/extraction/preliminary_analysis.R")
 
 
 # hardcoded
