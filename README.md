@@ -26,8 +26,6 @@ There is no wrapper script. The pipeline is run by hand, in the order described 
 
 Data files are gitignored. A fresh clone has the code and an empty `data_folder`.
 
-`REPO-STATUS.md` classifies every file in the repository as production or not, with the reasoning. `ISSUES.md` tracks known bugs.
-
 ## One-time setup
 
 1. **Install R and RStudio.** Open the project in RStudio so that `here()` resolves paths correctly.
