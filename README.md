@@ -112,7 +112,7 @@ So the two scripts in step 1 must share a day, and so must the two in step 3. If
 ## Potential Issues
 
 
-- **`process_deflators` references `params$deflate_year` with no `params:` block** (`Commercial_Value.Rmd`). Would error if enabled, but the author has confirmed commercial value is not meant to be deflated. Dead by design, not a defect. Documented inline.
+- **`process_deflators` references `params$deflate_year` with no `params:` block** (`Commercial_Value.Rmd`). Would error if enabled, currently the commercial value is not meant to be deflated. Dead by design, but we could switch to deflating easily. Documented inline.
 - **Deflators read but never applied** (`Commercial_Value.Rmd`). Same reason.
 - **Same-day coupling between extraction scripts.** `Commercial_Value.Rmd` looks up the deflator file with the vintage discovered from the commercial landings file, and `Recreational_Value.Rmd` reads `rectrip_` with the vintage from `mrip_sites_`. Confirmed intended: all extraction is run on one day. Documented inline in both files.
 - **Windowpane `tsn1==172746` handled twice** in consecutive `case_when` blocks (`Recreational_Value.Rmd`). The second is unreachable. Style; output is correct.
