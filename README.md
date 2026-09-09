@@ -109,6 +109,20 @@ So the two scripts in step 1 must share a day, and so must the two in step 3. If
 2. `snake_case` for names — not `camelCase`.
 3. Forward slashes in paths (`C:/path/to/folder`), for compatibility with unix and mac.
 
+
+
+## Potential Issues
+
+
+- **`process_deflators` references `params$deflate_year` with no `params:` block** (`Commercial_Value.Rmd`). Would error if enabled, but the author has confirmed commercial value is not meant to be deflated. Dead by design, not a defect. Documented inline.
+- **Deflators read but never applied** (`Commercial_Value.Rmd`). Same reason.
+- **Same-day coupling between extraction scripts.** `Commercial_Value.Rmd` looks up the deflator file with the vintage discovered from the commercial landings file, and `Recreational_Value.Rmd` reads `rectrip_` with the vintage from `mrip_sites_`. Confirmed intended: all extraction is run on one day. Documented inline in both files.
+- **Windowpane `tsn1==172746` handled twice** in consecutive `case_when` blocks (`Recreational_Value.Rmd`). The second is unreachable. Style; output is correct.
+- **Missing underscore in `Recreational_Expenditures_avg_NER_managed{rec_vintage_string}`** — the vintage runs into the filename. Cosmetic; the data is correct and the file is still discoverable.
+- **Tautological `stopifnot`** (`Commercial_Value.Rmd`): the check that no `stockarea` is missing runs immediately after the mutate that fills every missing value, so it cannot fail. Harmless, and arguably still useful as a guard if that mutate is ever changed.
+- **Stale chunk comment** on `compute_trips` (`Recreational_Value.Rmd`): says to set `eval=TRUE` only on the first run, but the chunk is set `eval=TRUE`. Clarified with an inline note rather than logged.
+
+
 ## NOAA Requirements
 
 This repository is a scientific product and is not official communication of the National Oceanic and Atmospheric Administration, or the United States Department of Commerce. All NOAA GitHub project code is provided on an 'as is' basis and the user assumes responsibility for its use. Any claims against the Department of Commerce or Department of Commerce bureaus stemming from the use of this GitHub project will be governed by all applicable Federal law. Any reference to specific commercial products, processes, or services by service mark, trademark, manufacturer, or otherwise, does not constitute or imply their endorsement, recommendation or favoring by the Department of Commerce. The Department of Commerce seal and logo, or the seal and logo of a DOC bureau, shall not be used in any manner to imply endorsement of any commercial product or activity by DOC or the United States Government."

@@ -243,7 +243,7 @@ impact.data0.2022.mod <- impact.data0.2022.mod %>%
 stopifnot(nrow(impact.data0.2022)==nrow(impact.data0.2022.mod))
 
   
-mid_atlantic<-c("RI","CT","NY","NJ","PA","DE","DC","VA","MD","NC")
+mid_atlantic<-c("CT","NY","NJ","PA","DE","DC","VA","MD","NC")
 new_england<-c("ME","NH","MA","RI","VT")
 my_states<-c(new_england,mid_atlantic)
 
