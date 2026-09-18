@@ -79,6 +79,12 @@ here::i_am("writing/Recreational_Value.Rmd")
 
 ```
 
+For recreational fisheries, we constructed total trips at the year-state-mode-stock level.  Trips were assigned to stocks using the target-species field and the intercept site.  For species with multiple stock areas, we assign trips to the nearest stock area**.  We used recreational expenditure survey data to construct recreational expenditures at that level. Value added was constructed by multiplying recreational expenditure by the value-added multiplier from our Input-Output models.
+
+* cams_garfo.cfg_statarea_stock, but supplemented because it does not have every stock area definition in it.
+** For example, a trip targeting cod that departed Gloucester, MA would be assigned to WGOM cod.  A trip targeting cod that departed from Chatham, MA would be assigned to SNE cod.
+
+
 ```{r extract_data, eval=FALSE, include=FALSE}
 
 #Some of the data prep takes a long time. 
